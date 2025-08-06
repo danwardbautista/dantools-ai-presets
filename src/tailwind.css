@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Essential base styles to maintain original appearance */
+body, html {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  box-sizing: border-box;
+  height: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Remove default list styling */
+ul, ol {
+  list-style: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+li {
+  list-style: none !important;
+  margin: 0;
+  padding: 0;
+}
+
+/* Fix button styling */
+button {
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+/* Ensure proper link styling */
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* Navigation specific resets */
+nav ul, nav ol, nav li {
+  list-style: none !important;
+  list-style-type: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+nav ul::before, nav ol::before, nav li::before {
+  content: none !important;
+}
+
+/* Sidebar specific styling */
+.sidebar nav ul li {
+  list-style: none !important;
+  list-style-type: none !important;
+}
+
+/* Custom Scrollbar Styling */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(252, 248, 221, 0.4) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(252, 248, 221, 0.4);
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(252, 248, 221, 0.6);
+}
+
+.scrollbar-thin::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-button {
+  display: none;
+}

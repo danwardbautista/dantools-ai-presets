@@ -1,0 +1,393 @@
+import React, { useState, useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { FaSearch } from "react-icons/fa";
+import { ChatMessage, PresetConfig } from '../types';
+import { openai, sanitizeInput } from '../utils/openai';
+import { adjustTextareaHeight } from '../utils/dom';
+
+export interface CustomChatProps {
+  messages: ChatMessage[];
+  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  setIsGenerating: React.Dispatch<React.SetStateAction<boolean>>;
+  scannerType: string;
+  presetConfig: PresetConfig;
+  conversationTitle?: string;
+}
+
+const codeComponentConfig = {
+  code({ className, children, ...props }: React.ComponentProps<'code'>) {
+    const match = /language-(\w+)/.exec(className || "");
+    return match ? (
+      <SyntaxHighlighter
+        style={vscDarkPlus}
+        language={match[1]}
+        PreTag="div"
+        customStyle={{
+          margin: '12px 0',
+          border: 'none',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+          borderRadius: '12px',
+          padding: '16px',
+          background: 'linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%)',
+          fontSize: '14px',
+          lineHeight: '1.6'
+        }}
+      >
+        {String(children).replace(/\n$/, "")}
+      </SyntaxHighlighter>
+    ) : (
+      <code className={`${className} bg-black/20 text-current px-2 py-1 rounded text-sm font-mono border border-current/20`} {...props}>
+        {children}
+      </code>
+    );
+  },
+};
+
+// main chat interface component - handles message display and user input
+const CustomChat: React.FC<CustomChatProps> = ({ 
+  messages, 
+  setMessages, 
+  setIsGenerating, 
+  scannerType,
+  presetConfig,
+  conversationTitle
+}) => {
+  const [input, setInput] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const [streamingMessage, setStreamingMessage] = useState("");
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const [customSystemPrompt, setCustomSystemPrompt] = useState<string | null>(null);
+  const chatFeedRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const loadCustomPrompts = () => {
+      const saved = localStorage.getItem('dantools-system-prompts');
+      if (saved) {
+        try {
+          const parsedPrompts = JSON.parse(saved);
+          if (parsedPrompts[scannerType]) {
+            setCustomSystemPrompt(parsedPrompts[scannerType]);
+          }
+        } catch {
+          // cant load custom prompts, use defaults
+        }
+      }
+    };
+
+    loadCustomPrompts();
+
+    const onSystemPromptsUpdate = (event: CustomEvent) => {
+      const updatedPrompts = event.detail;
+      if (updatedPrompts[scannerType]) {
+        setCustomSystemPrompt(updatedPrompts[scannerType]);
+      }
+    };
+
+    window.addEventListener('systemPromptsUpdated', onSystemPromptsUpdate as EventListener);
+    return () => {
+      window.removeEventListener('systemPromptsUpdated', onSystemPromptsUpdate as EventListener);
+    };
+  }, [scannerType]);
+
+  const systemPrompt = {
+    role: "system" as const,
+    content: customSystemPrompt || presetConfig?.systemPrompt || "You are a helpful AI assistant.",
+  };
+
+  useEffect(() => {
+    if (chatFeedRef.current) {
+      chatFeedRef.current.scrollTop = chatFeedRef.current.scrollHeight;
+    }
+  }, [messages, isTyping, streamingMessage]);
+
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isTyping) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    const onPopState = (e: PopStateEvent) => {
+      if (isTyping) {
+        e.preventDefault();
+        window.history.pushState(null, '', window.location.href);
+        alert('wait for analysis to finish before leaving');
+      }
+    };
+
+    if (isTyping) {
+      window.addEventListener('beforeunload', onBeforeUnload);
+      window.addEventListener('popstate', onPopState);
+    }
+
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      window.removeEventListener('popstate', onPopState);
+    };
+  }, [isTyping]);
+
+  useEffect(() => {
+    adjustTextareaHeight(textareaRef.current);
+  }, [input]);
+
+  // show loading or error if config not loaded
+  if (!presetConfig) {
+    return (
+      <div className="h-screen bg-[#0d2549] flex items-center justify-center">
+        <div className="text-center text-[#FCF8DD]">
+          <div className="text-xl mb-4">Loading scanner configuration...</div>
+          <div className="text-sm opacity-80">If this persists, the preset may not exist.</div>
+        </div>
+      </div>
+    );
+  }
+
+  // abort current api request and save partial response
+  const stopGeneration = () => {
+    if (abortController) {
+      abortController.abort();
+      setAbortController(null);
+      setIsTyping(false);
+      setIsGenerating(false);
+      if (streamingMessage) {
+        setMessages((prev) => [
+          ...prev,
+          { sender: "bot", message: streamingMessage },
+        ]);
+        setStreamingMessage("");
+      }
+    }
+  };
+
+  // sends user message to openai and streams response
+  const sendMessage = async (messageText?: string) => {
+    const textToSend = messageText || input.trim();
+    if (!textToSend || isTyping) return;
+
+    const cleanInput = sanitizeInput(textToSend);
+    const userMsg: ChatMessage = { sender: "user", message: cleanInput };
+    setMessages((prev) => [...prev, userMsg]);
+    setInput("");
+    setIsTyping(true);
+    setIsGenerating(true);
+    setStreamingMessage("");
+
+    const controller = new AbortController();
+    setAbortController(controller);
+
+    // build conversation context with system prompt + message history
+    const conversationPayload = [
+      systemPrompt,
+      ...messages.map((msg) => ({
+        role: msg.sender === "user" ? "user" as const : "assistant" as const,
+        content: msg.message,
+      })),
+      { role: "user" as const, content: cleanInput },
+    ];
+
+    try {
+      const stream = await openai.chat.completions.create({
+        model: "gpt-4.1",
+        messages: conversationPayload,
+        temperature: 0.7,
+        stream: true,
+      }, {
+        signal: controller.signal,
+      });
+
+      // stream response chunks and update ui in real time
+      let fullResponse = "";
+      for await (const chunk of stream) {
+        if (controller.signal.aborted) break;
+        
+        const content = chunk.choices[0]?.delta?.content || "";
+        if (content) {
+          fullResponse += content;
+          setStreamingMessage(fullResponse);
+        }
+      }
+
+      if (!controller.signal.aborted) {
+        setMessages((prev) => [
+          ...prev,
+          { sender: "bot", message: fullResponse },
+        ]);
+        setStreamingMessage("");
+      }
+    } catch (e: unknown) {
+      // api call failed
+      if (e instanceof Error && e.name !== 'AbortError') {
+        setMessages((prev) => [
+          ...prev,
+          {
+            sender: "bot",
+            message: "something went wrong, try again",
+          },
+        ]);
+      }
+    } finally {
+      setIsTyping(false);
+      setIsGenerating(false);
+      setAbortController(null);
+      setStreamingMessage("");
+    }
+  };
+
+  const send = () => {
+    sendMessage();
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  };
+
+
+  return (
+    <div className="h-screen bg-[#0d2549] flex flex-col">
+      {/* Regular Chat Layout */}
+      <div className="flex flex-col h-full">
+        {/* Enhanced scanner title */}
+        <div className="bg-[#112f5e] border-b border-[#FCF8DD]/10 px-6 py-4">
+          <span className="text-lg font-medium text-[#FCF8DD]">
+            {conversationTitle || presetConfig.title}
+          </span>
+        </div>
+
+      <div 
+        className="flex-1 overflow-y-auto px-4 py-6 chat-scroll scrollbar-thin scrollbar-track-[#0d2549] scrollbar-thumb-[#FCF8DD]/30 hover:scrollbar-thumb-[#FCF8DD]/50" 
+        ref={chatFeedRef}
+      >
+        <div className="max-w-4xl mx-auto space-y-6">
+          {messages.length === 0 && (
+            <div className="text-center py-16">
+              <div className="mb-6">
+                <div className="w-12 h-12 mx-auto rounded-xl bg-[#FCF8DD] flex items-center justify-center mb-4">
+                  <FaSearch className="text-[#112f5e] text-lg" />
+                </div>
+              </div>
+              <h3 className="text-2xl font-semibold text-[#FCF8DD] mb-3">
+                {presetConfig.title}
+              </h3>
+              <p className="text-[#FCF8DD]/80 text-base leading-relaxed max-w-xl mx-auto">
+                Start a conversation using the preset configuration selected.
+              </p>
+            </div>
+          )}
+          {messages.map((msg, index) => (
+            <div
+              key={index}
+              className={`flex ${
+                msg.sender === "user" ? "justify-end" : "justify-start"
+              } mb-4`}
+            >
+              <div
+                className={`max-w-3xl ${
+                  msg.sender === "user"
+                    ? "bg-[#FCF8DD] text-[#112f5e] shadow-sm border border-[#FCF8DD]/20 rounded-lg px-3 py-3 leading-none [&_p]:my-0"
+                    : "text-[#FCF8DD] text-base leading-relaxed"
+                }`}
+              >
+                <ReactMarkdown
+                  skipHtml={true}
+                  components={codeComponentConfig}
+                >
+                  {msg.message}
+                </ReactMarkdown>
+              </div>
+            </div>
+          ))}
+
+          {isTyping && (
+            <div className="flex justify-start mb-4">
+              <div className="max-w-3xl text-[#FCF8DD] text-base leading-relaxed">
+                {streamingMessage ? (
+                  <ReactMarkdown
+                    skipHtml={true}
+                    components={codeComponentConfig}
+                  >
+                    {streamingMessage}
+                  </ReactMarkdown>
+                ) : (
+                  <div className="flex items-center space-x-2">
+                    <div className="flex space-x-1">
+                      <div className="w-2 h-2 bg-[#FCF8DD]/80 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-[#FCF8DD]/60 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                      <div className="w-2 h-2 bg-[#FCF8DD]/40 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                    </div>
+                    <span className="text-[#FCF8DD]/80 text-sm">Thinking...</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-[#112f5e] border-t border-[#FCF8DD]/10 p-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-end gap-3">
+            <textarea
+              ref={textareaRef}
+              className="flex-1 resize-none border border-[#FCF8DD]/20 rounded-2xl px-6 py-5 focus:ring-2 focus:ring-[#FCF8DD] focus:border-[#FCF8DD] outline-none transition-all duration-200 max-h-48 bg-[#0d2549] text-[#FCF8DD] placeholder-[#FCF8DD]/60 text-lg leading-normal min-h-[60px] scrollbar-thin scrollbar-track-[#0d2549] scrollbar-thumb-[#FCF8DD]/30 hover:scrollbar-thumb-[#FCF8DD]/50"
+              placeholder="type your message here..."
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value);
+                adjustTextareaHeight(textareaRef.current);
+              }}
+              onKeyDown={onKeyDown}
+              rows={1}
+            />
+
+            {isTyping ? (
+              <button
+                className="bg-red-500 hover:bg-red-600 text-white p-4 rounded-xl transition-colors duration-200 flex-shrink-0"
+                onClick={stopGeneration}
+                title="Stop generation"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <rect x="6" y="6" width="12" height="12" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                className={`p-4 rounded-xl transition-all duration-200 flex-shrink-0 ${
+                  input.trim() 
+                    ? "bg-[#FCF8DD] hover:bg-[#FCF8DD]/90 text-[#112f5e]" 
+                    : "bg-[#FCF8DD]/20 text-[#FCF8DD]/40 cursor-not-allowed"
+                }`}
+                onClick={send}
+                disabled={!input.trim()}
+                title="Send message"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+      </div>
+    </div>
+  );
+};
+
+export default CustomChat;
