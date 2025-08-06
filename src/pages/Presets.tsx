@@ -1,21 +1,23 @@
 import React, { useState, useEffect } from "react";
-import { FaUndo, FaEdit, FaPlus, FaTrash } from "react-icons/fa";
+import { FaEdit, FaPlus, FaTrash, FaExclamationTriangle, FaTimes } from "react-icons/fa";
 import PresetModal from "../components/PresetModal";
 import { PresetConfig } from '../types';
 import { defaultPresets } from '../utils/presets';
-import { loadFromStorage, saveToStorage, removeFromStorage, clearStorageByPattern, saveToStorageWithEvent } from '../utils/localStorage';
+import { loadFromStorage, removeFromStorage, saveToStorageWithEvent } from '../utils/localStorage';
 
 const Presets: React.FC = () => {
   const [presets, setPresets] = useState<PresetConfig[]>(defaultPresets);
   const [showPresetModal, setShowPresetModal] = useState(false);
   const [editingPreset, setEditingPreset] = useState<PresetConfig | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   useEffect(() => {
     const savedPresets = loadFromStorage('dantools-presets', defaultPresets);
     setPresets(savedPresets);
   }, []);
 
-  // saves presets and triggers update event for other components
+  // save presets and tell other parts about it
   const savePresetsToStorage = (newPresets: PresetConfig[]) => {
     saveToStorageWithEvent('dantools-presets', newPresets, 'presetsUpdated');
     setPresets(newPresets);
@@ -44,23 +46,23 @@ const Presets: React.FC = () => {
     }
   };
 
-  // wipes all custom presets and conversations, returns to defaults
-  const resetToDefaults = () => {
-    if (window.confirm('Are you sure you want to reset all presets to defaults? This will remove all custom presets and their conversations.')) {
+  // wipe everything from localStorage
+  const deleteAllPresets = () => {
+    if (deleteConfirmText === 'DELETE') {
+      // clear all localStorage data
+      localStorage.clear();
+      
+      // reset to default presets
       savePresetsToStorage(defaultPresets);
       
-      // Clear all custom conversations
-      clearStorageByPattern('dantools-conversations-');
-      
-      // Re-save default conversations if they exist
-      const defaultIds = defaultPresets.map(p => p.id);
-      defaultIds.forEach(id => {
-        const existing = loadFromStorage(`dantools-conversations-${id}`, []);
-        if (existing.length > 0) {
-          saveToStorage(`dantools-conversations-${id}`, existing);
-        }
-      });
+      setShowDeleteModal(false);
+      setDeleteConfirmText('');
     }
+  };
+
+  const handleDeleteModalClose = () => {
+    setShowDeleteModal(false);
+    setDeleteConfirmText('');
   };
 
   return (
@@ -84,11 +86,11 @@ const Presets: React.FC = () => {
               Create New Preset
             </button>
             <button
-              onClick={resetToDefaults}
-              className="bg-[#FCF8DD]/10 hover:bg-[#FCF8DD]/20 text-[#FCF8DD] px-4 py-3 rounded-lg transition-all duration-200 flex items-center gap-2 border border-[#FCF8DD]/30 hover:border-[#FCF8DD]/50"
+              onClick={() => setShowDeleteModal(true)}
+              className="bg-red-500/20 hover:bg-red-500/30 text-red-300 hover:text-red-200 px-4 py-3 rounded-lg transition-all duration-200 flex items-center gap-2 border border-red-500/30 hover:border-red-500/50"
             >
-              <FaUndo className="text-xs" />
-              Reset to Defaults
+              <FaTrash className="text-xs" />
+              Delete All
             </button>
           </div>
         </div>
@@ -112,9 +114,13 @@ const Presets: React.FC = () => {
               <div className="p-4 pb-3">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <h3 className="text-lg font-bold text-[#FCF8DD] leading-tight">{preset.title}</h3>
-                  {preset.isCustom && (
+                  {preset.isCustom ? (
                     <span className="bg-[#FCF8DD]/20 text-[#FCF8DD] text-xs px-2 py-1 rounded-full font-medium flex-shrink-0">
                       Custom
+                    </span>
+                  ) : (
+                    <span className="bg-green-500/20 text-green-300 text-xs px-2 py-1 rounded-full font-medium flex-shrink-0">
+                      Sample
                     </span>
                   )}
                 </div>
@@ -192,6 +198,69 @@ const Presets: React.FC = () => {
         onSave={savePreset}
         editingPreset={editingPreset}
       />
+
+      {/* delete everything modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#112f5e] rounded-2xl shadow-2xl w-full max-w-md border border-red-500/30">
+            <div className="sticky top-0 bg-[#112f5e] border-b border-red-500/20 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center">
+                  <FaExclamationTriangle className="text-red-400" />
+                </div>
+                <h2 className="text-xl font-bold text-red-300">Danger Zone</h2>
+              </div>
+              <button
+                onClick={handleDeleteModalClose}
+                className="p-2 hover:bg-red-500/10 rounded-lg transition-colors"
+              >
+                <FaTimes className="text-red-300/70 hover:text-red-300" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FaTrash className="text-2xl text-red-400" />
+                </div>
+                <h3 className="text-lg font-bold text-[#FCF8DD] mb-2">Delete All Presets</h3>
+                <p className="text-[#FCF8DD]/80 text-sm leading-relaxed">
+                  This will delete <strong>all presets</strong> and <strong>all chat history</strong>! Only the default samples will remain.
+                </p>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-[#FCF8DD]/90 mb-3">
+                  Type <strong className="text-red-300">DELETE</strong> to confirm:
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  className="w-full px-3 py-2 border border-red-500/30 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 outline-none bg-[#0d2549] text-[#FCF8DD] placeholder-[#FCF8DD]/60"
+                  placeholder="Type DELETE here..."
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={handleDeleteModalClose}
+                  className="px-4 py-2 text-[#FCF8DD]/80 bg-[#FCF8DD]/10 hover:bg-[#FCF8DD]/20 rounded-lg transition-colors border border-[#FCF8DD]/20 hover:border-[#FCF8DD]/30"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={deleteAllPresets}
+                  disabled={deleteConfirmText !== 'DELETE'}
+                  className="px-6 py-2 bg-red-500 hover:bg-red-600 disabled:bg-red-500/50 text-white rounded-lg transition-colors font-medium shadow-lg hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Delete All Presets
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

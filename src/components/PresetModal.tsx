@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaTimes } from 'react-icons/fa';
 import { PresetConfig } from '../types';
-import { themePresets } from '../utils/presets';
+import { themePresets, gptModelOptions } from '../utils/presets';
 import { isFormValid } from '../utils/validation';
 
 interface PresetModalProps {
@@ -17,9 +17,41 @@ const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose, onSave, edit
     subtitle: '',
     icon: 'code',
     systemPrompt: '',
+    model: gptModelOptions[0].value,
     theme: themePresets[0],
     isCustom: true,
   });
+
+  const [isCustomColor, setIsCustomColor] = useState(false);
+  const [customColor, setCustomColor] = useState('#3B82F6');
+
+  // make theme colors from one color
+  const generateThemeFromColor = (color: string) => {
+    // convert hex to numbers
+    const hex = color.replace('#', '');
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+    
+    // make lighter version
+    const lighterR = Math.min(255, r + 40);
+    const lighterG = Math.min(255, g + 40);
+    const lighterB = Math.min(255, b + 40);
+    const secondary = `rgb(${lighterR}, ${lighterG}, ${lighterB})`;
+    
+    // make even lighter accent
+    const accentR = Math.min(255, r + 100);
+    const accentG = Math.min(255, g + 100);
+    const accentB = Math.min(255, b + 100);
+    const accent = `rgb(${accentR}, ${accentG}, ${accentB})`;
+    
+    return {
+      primary: color,
+      secondary: secondary,
+      accent: accent,
+      gradient: `linear-gradient(135deg, ${color} 0%, ${secondary} 100%)`
+    };
+  };
 
   useEffect(() => {
     if (editingPreset) {
@@ -28,18 +60,29 @@ const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose, onSave, edit
         subtitle: editingPreset.subtitle,
         icon: editingPreset.icon,
         systemPrompt: editingPreset.systemPrompt,
+        model: editingPreset.model || gptModelOptions[0].value,
         theme: editingPreset.theme,
         isCustom: editingPreset.isCustom,
       });
+      
+      // figure out if using custom color
+      const isPresetTheme = themePresets.some(preset => preset.primary === editingPreset.theme.primary);
+      setIsCustomColor(!isPresetTheme);
+      if (!isPresetTheme) {
+        setCustomColor(editingPreset.theme.primary);
+      }
     } else {
       setFormData({
         title: '',
         subtitle: '',
         icon: 'code',
         systemPrompt: '',
+        model: gptModelOptions[0].value,
         theme: themePresets[0],
         isCustom: true,
       });
+      setIsCustomColor(false);
+      setCustomColor('#3B82F6');
     }
   }, [editingPreset, isOpen]);
 
@@ -58,13 +101,26 @@ const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose, onSave, edit
 
   const selectTheme = (theme: typeof themePresets[0]) => {
     setFormData(prev => ({ ...prev, theme }));
+    setIsCustomColor(false);
+  };
+
+  const selectCustomColor = () => {
+    setIsCustomColor(true);
+    const customTheme = generateThemeFromColor(customColor);
+    setFormData(prev => ({ ...prev, theme: customTheme }));
+  };
+
+  const handleColorChange = (color: string) => {
+    setCustomColor(color);
+    const customTheme = generateThemeFromColor(color);
+    setFormData(prev => ({ ...prev, theme: customTheme }));
   };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#112f5e] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-[#FCF8DD]/20">
+      <div className="bg-[#112f5e] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-[#FCF8DD]/20 scrollbar-thin scrollbar-track-[#0d2549] scrollbar-thumb-[#FCF8DD]/30 hover:scrollbar-thumb-[#FCF8DD]/50">
         <div className="sticky top-0 bg-[#112f5e] border-b border-[#FCF8DD]/20 px-6 py-4 flex items-center justify-between rounded-t-2xl">
           <div className="flex items-center gap-3">
             <h2 className="text-2xl font-bold text-[#FCF8DD]">
@@ -114,19 +170,40 @@ const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose, onSave, edit
             </div>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-[#FCF8DD]/90 mb-2">
+              GPT Model *
+            </label>
+            <select
+              value={formData.model}
+              onChange={(e) => setFormData(prev => ({ ...prev, model: e.target.value }))}
+              className="w-full px-3 py-2 border border-[#FCF8DD]/30 rounded-lg focus:ring-2 focus:ring-[#FCF8DD]/50 focus:border-[#FCF8DD] outline-none bg-[#0d2549] text-[#FCF8DD] cursor-pointer"
+              required
+            >
+              {gptModelOptions.map((option) => (
+                <option key={option.value} value={option.value} className="bg-[#0d2549] text-[#FCF8DD]">
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-sm text-[#FCF8DD]/60 mt-1">
+              Choose the GPT model for this preset. Only GPT-4.1 and GPT-4o variants are available.
+            </p>
+          </div>
+
 
           <div>
             <label className="block text-sm font-medium text-[#FCF8DD]/90 mb-2">
               Color Theme
             </label>
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-4">
               {themePresets.map((theme) => (
                 <button
                   key={theme.name}
                   type="button"
                   onClick={() => selectTheme(theme)}
                   className={`p-3 rounded-lg border-2 transition-all hover:scale-105 ${
-                    formData.theme.primary === theme.primary
+                    !isCustomColor && formData.theme.primary === theme.primary
                       ? 'border-[#FCF8DD] bg-[#FCF8DD]/10 shadow-lg'
                       : 'border-[#FCF8DD]/30 hover:border-[#FCF8DD]/50'
                   }`}
@@ -138,6 +215,54 @@ const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose, onSave, edit
                   <div className="text-xs text-[#FCF8DD]/80 font-medium">{theme.name}</div>
                 </button>
               ))}
+            </div>
+            
+            {/* custom color picker */}
+            <div className="border-t border-[#FCF8DD]/20 pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium text-[#FCF8DD]/90">Custom Color</span>
+                <button
+                  type="button"
+                  onClick={selectCustomColor}
+                  className={`text-xs px-3 py-1 rounded-lg transition-colors ${
+                    isCustomColor
+                      ? 'bg-[#FCF8DD] text-[#112f5e] font-medium'
+                      : 'bg-[#FCF8DD]/20 text-[#FCF8DD]/80 hover:bg-[#FCF8DD]/30'
+                  }`}
+                >
+                  {isCustomColor ? 'Selected' : 'Use Custom'}
+                </button>
+              </div>
+              
+              {isCustomColor && (
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={customColor}
+                      onChange={(e) => handleColorChange(e.target.value)}
+                      className="w-12 h-12 rounded-lg border-2 border-[#FCF8DD]/30 cursor-pointer bg-transparent"
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-xs text-[#FCF8DD]/70 mb-1">Color Value</span>
+                      <input
+                        type="text"
+                        value={customColor}
+                        onChange={(e) => handleColorChange(e.target.value)}
+                        className="w-20 px-2 py-1 text-xs border border-[#FCF8DD]/30 rounded bg-[#0d2549] text-[#FCF8DD] font-mono"
+                        placeholder="#3B82F6"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-xs text-[#FCF8DD]/70 mb-1">Preview</div>
+                    <div 
+                      className="w-full h-8 rounded-lg border border-[#FCF8DD]/20"
+                      style={{ background: formData.theme.gradient }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

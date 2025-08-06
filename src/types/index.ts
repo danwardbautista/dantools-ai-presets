@@ -9,6 +9,7 @@ export interface PresetConfig {
   subtitle: string;
   icon: string;
   systemPrompt: string;
+  model?: string;
   theme: {
     primary: string;
     secondary: string;

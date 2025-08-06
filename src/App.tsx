@@ -83,7 +83,7 @@ const AppContent: React.FC = () => {
     const baseTitle = await makeConversationTitle(messages, preset?.title);
     
     setSavedConversations(prevAllConversations => {
-      const prevConversations = prevAllConversations[scannerType];
+      const prevConversations = prevAllConversations[scannerType] || [];
       const existingTitles = prevConversations.map(conv => conv.title);
       const title = ensureUniqueTitle(baseTitle, existingTitles);
       
@@ -246,9 +246,11 @@ const AppContent: React.FC = () => {
     const allConversations: Array<SavedConversation & { scannerType: ScannerType }> = [];
     
     Object.entries(savedConversations).forEach(([type, conversations]) => {
-      conversations.forEach(conv => {
-        allConversations.push({ ...conv, scannerType: type as ScannerType });
-      });
+      if (conversations) {
+        conversations.forEach(conv => {
+          allConversations.push({ ...conv, scannerType: type as ScannerType });
+        });
+      }
     });
     
     return allConversations.sort((a, b) => b.timestamp - a.timestamp);
@@ -347,7 +349,7 @@ const AppContent: React.FC = () => {
                     Clear All
                   </button>
                 </div>
-                <div className="flex-1 overflow-y-auto px-2 space-y-1 min-h-0 scrollbar-thin scrollbar-track-[#112f5e] scrollbar-thumb-[#FCF8DD]/30 hover:scrollbar-thumb-[#FCF8DD]/50">
+                <div className="flex-1 overflow-y-auto px-2 space-y-1 min-h-0 scrollbar-thin scrollbar-track-[#0d2549] scrollbar-thumb-[#FCF8DD]/30 hover:scrollbar-thumb-[#FCF8DD]/50">
                   {getAllConversations().length > 0 ? (
                     getAllConversations().slice(0, 20).map((conversation) => {
                       const isActive = isConversationActive(conversation);
@@ -528,7 +530,7 @@ const PresetSelectionScreen: React.FC<PresetSelectionScreenProps> = ({ presets, 
             
             {isDropdownOpen && (
               <div className="absolute top-full left-0 right-0 mt-2 bg-[#112f5e] border-2 border-[#FCF8DD]/30 rounded-2xl shadow-2xl z-50 overflow-hidden">
-                <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-track-[#112f5e] scrollbar-thumb-[#FCF8DD]/30 hover:scrollbar-thumb-[#FCF8DD]/50">
+                <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-track-[#0d2549] scrollbar-thumb-[#FCF8DD]/30 hover:scrollbar-thumb-[#FCF8DD]/50">
                   {presets.map((preset, index) => (
                     <button
                       key={preset.id}
@@ -547,6 +549,7 @@ const PresetSelectionScreen: React.FC<PresetSelectionScreenProps> = ({ presets, 
                       <div className="flex-1 min-w-0">
                         <div className="text-[#FCF8DD] font-medium">{preset.title}</div>
                         <div className="text-[#FCF8DD]/60 text-sm truncate">{preset.subtitle}</div>
+                        <div className="text-[#FCF8DD]/50 text-xs mt-1 font-mono">{preset.model || 'gpt-4.1'}</div>
                       </div>
                     </button>
                   ))}
@@ -580,9 +583,15 @@ const PresetSelectionScreen: React.FC<PresetSelectionScreenProps> = ({ presets, 
                     <h3 className="text-xl font-bold text-[#FCF8DD] mb-2 leading-tight">
                       {preset.title}
                     </h3>
-                    <p className="text-sm text-[#FCF8DD]/80 leading-relaxed">
+                    <p className="text-sm text-[#FCF8DD]/80 leading-relaxed mb-3">
                       {preset.subtitle}
                     </p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-[#FCF8DD]/60 font-medium">Model:</span>
+                      <span className="text-xs text-[#FCF8DD]/80 bg-[#FCF8DD]/10 px-2 py-1 rounded-md font-mono">
+                        {preset.model || 'gpt-4.1'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               );
