@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { FaEdit, FaPlus, FaTrash, FaExclamationTriangle, FaTimes } from "react-icons/fa";
+import { FaEdit, FaPlus, FaTrash, FaExclamationTriangle, FaTimes, FaStar } from "react-icons/fa";
 import PresetModal from "../components/PresetModal";
 import { PresetConfig } from '../types';
 import { defaultPresets } from '../utils/presets';
@@ -65,6 +65,13 @@ const Presets: React.FC = () => {
     setDeleteConfirmText('');
   };
 
+  const toggleFavorite = (presetId: string) => {
+    const newPresets = presets.map(p => 
+      p.id === presetId ? { ...p, isFavorite: !p.isFavorite } : p
+    );
+    savePresetsToStorage(newPresets);
+  };
+
   return (
     <div className="min-h-screen bg-[#0d2549] p-8">
       {/* Header Section */}
@@ -113,16 +120,29 @@ const Presets: React.FC = () => {
               {/* Card Content */}
               <div className="p-4 pb-3">
                 <div className="flex items-start justify-between gap-2 mb-2">
-                  <h3 className="text-lg font-bold text-[#FCF8DD] leading-tight">{preset.title}</h3>
-                  {preset.isCustom ? (
-                    <span className="bg-[#FCF8DD]/20 text-[#FCF8DD] text-xs px-2 py-1 rounded-full font-medium flex-shrink-0">
-                      Custom
-                    </span>
-                  ) : (
-                    <span className="bg-green-500/20 text-green-300 text-xs px-2 py-1 rounded-full font-medium flex-shrink-0">
-                      Sample
-                    </span>
-                  )}
+                  <h3 className="text-lg font-bold text-[#FCF8DD] leading-tight flex-1">{preset.title}</h3>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => toggleFavorite(preset.id)}
+                      className={`p-1.5 rounded-lg transition-all duration-200 ${
+                        preset.isFavorite 
+                          ? 'text-yellow-400 bg-yellow-400/20 hover:bg-yellow-400/30' 
+                          : 'text-[#FCF8DD]/40 hover:text-yellow-400 hover:bg-yellow-400/20'
+                      }`}
+                      title={preset.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                    >
+                      <FaStar className="text-sm" />
+                    </button>
+                    {preset.isCustom ? (
+                      <span className="bg-[#FCF8DD]/20 text-[#FCF8DD] text-xs px-2 py-1 rounded-full font-medium">
+                        Custom
+                      </span>
+                    ) : (
+                      <span className="bg-green-500/20 text-green-300 text-xs px-2 py-1 rounded-full font-medium">
+                        Sample
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <p className="text-xs text-[#FCF8DD]/70 leading-relaxed">{preset.subtitle}</p>
               </div>

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { FaCog, FaBars, FaChevronRight, FaPlus } from 'react-icons/fa';
+import { FaCog, FaBars, FaChevronRight, FaPlus, FaStar } from 'react-icons/fa';
 import CustomChat from './components/CustomChat';
 import Presets from './pages/Presets';
 import { ChatMessage, PresetConfig, SavedConversation, ScannerType } from './types';
@@ -503,17 +503,57 @@ const PresetSelectionScreen: React.FC<PresetSelectionScreenProps> = ({ presets, 
   const [selectedPreset, setSelectedPreset] = useState<string>('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
+  const favoritePresets = presets.filter(p => p.isFavorite);
+
   return (
-    <div className="h-screen bg-[#0d2549] flex items-center justify-center">
-      <div className="text-center text-[#FCF8DD] max-w-2xl px-8">
+    <div className="h-screen bg-[#0d2549] flex items-center justify-center overflow-y-auto py-8">
+      <div className="text-center text-[#FCF8DD] max-w-4xl px-8">
         <h1 className="text-4xl font-bold mb-4">Start New Chat</h1>
-        <p className="text-xl text-[#FCF8DD]/80 mb-12 leading-relaxed">
+        <p className="text-xl text-[#FCF8DD]/80 mb-8 leading-relaxed">
           Choose a preset to start a customized conversation
         </p>
 
+        {/* Favorite Presets Mini Cards */}
+        {favoritePresets.length > 0 && (
+          <div className="mb-12">
+            <h2 className="text-lg font-semibold text-[#FCF8DD]/90 mb-6">⭐ Your Favorites</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto">
+              {favoritePresets.map((preset) => (
+                <button
+                  key={preset.id}
+                  onClick={() => onSelectPreset(preset.id)}
+                  className="bg-[#112f5e] border-2 border-[#FCF8DD]/20 hover:border-[#FCF8DD]/40 rounded-xl overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-xl group text-left"
+                >
+                  <div 
+                    className="h-2 w-full"
+                    style={{ background: preset.theme.gradient }}
+                  />
+                  <div className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="text-sm font-bold text-[#FCF8DD] leading-tight flex-1">{preset.title}</h3>
+                      <div className="text-yellow-400 text-xs">
+                        <FaStar />
+                      </div>
+                    </div>
+                    <p className="text-xs text-[#FCF8DD]/70 leading-relaxed mb-3">{preset.subtitle}</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-[#FCF8DD]/50 bg-[#FCF8DD]/10 px-2 py-1 rounded font-mono">
+                        {preset.model || 'gpt-4.1'}
+                      </span>
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <span className="text-xs text-[#FCF8DD]/60">Click to start →</span>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="mb-8">
           <label className="block text-lg font-medium mb-6 text-[#FCF8DD]/90">
-            Select Chat Preset:
+            {favoritePresets.length > 0 ? 'Or browse all presets:' : 'Select Chat Preset:'}
           </label>
           <div className="relative max-w-lg mx-auto">
             <button

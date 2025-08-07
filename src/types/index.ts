@@ -17,6 +17,7 @@ export interface PresetConfig {
     gradient: string;
   };
   isCustom?: boolean;
+  isFavorite?: boolean;
 }
 
 export interface SavedConversation {
