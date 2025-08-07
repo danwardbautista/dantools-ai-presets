@@ -1,8 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { FaSearch } from "react-icons/fa";
+import { FaSearch, FaComments, FaCopy, FaCheck } from "react-icons/fa";
+import 'katex/dist/katex.min.css';
 import { ChatMessage, PresetConfig } from '../types';
 import { openai, sanitizeInput } from '../utils/openai';
 import { adjustTextareaHeight } from '../utils/dom';
@@ -16,13 +20,53 @@ export interface CustomChatProps {
   conversationTitle?: string;
 }
 
-const codeComponentConfig = {
-  code({ className, children, ...props }: React.ComponentProps<'code'>) {
-    const match = /language-(\w+)/.exec(className || "");
-    return match ? (
+const CodeBlock: React.FC<{ children: string; language?: string; isInline?: boolean }> = ({ 
+  children, 
+  language, 
+  isInline = false 
+}) => {
+  const [copied, setCopied] = useState(false);
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(children);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+    }
+  };
+
+  if (isInline) {
+    return (
+      <code className="bg-black/20 text-current px-2 py-1 rounded text-sm font-mono border border-current/20">
+        {children}
+      </code>
+    );
+  }
+
+  return (
+    <div className="relative group">
+      <button
+        onClick={copyToClipboard}
+        className="absolute top-3 right-3 z-10 bg-black/50 hover:bg-black/70 text-white p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center gap-2"
+        title={copied ? "Copied!" : "Copy code"}
+      >
+        {copied ? (
+          <>
+            <FaCheck className="text-green-400 text-sm" />
+            <span className="text-xs">Copied!</span>
+          </>
+        ) : (
+          <>
+            <FaCopy className="text-sm" />
+            <span className="text-xs">Copy</span>
+          </>
+        )}
+      </button>
       <SyntaxHighlighter
         style={vscDarkPlus}
-        language={match[1]}
+        language={language || 'text'}
         PreTag="div"
         customStyle={{
           margin: '12px 0',
@@ -30,19 +74,186 @@ const codeComponentConfig = {
           boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
           borderRadius: '12px',
           padding: '16px',
+          paddingRight: '60px',
           background: 'linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%)',
           fontSize: '14px',
           lineHeight: '1.6'
         }}
       >
-        {String(children).replace(/\n$/, "")}
+        {children.replace(/\n$/, "")}
       </SyntaxHighlighter>
+    </div>
+  );
+};
+
+const markdownComponents = {
+  code({ className, children, ...props }: React.ComponentProps<'code'>) {
+    const match = /language-(\w+)/.exec(className || "");
+    const codeContent = String(children);
+    
+    return match ? (
+      <CodeBlock language={match[1]}>
+        {codeContent}
+      </CodeBlock>
     ) : (
-      <code className={`${className} bg-black/20 text-current px-2 py-1 rounded text-sm font-mono border border-current/20`} {...props}>
-        {children}
-      </code>
+      <CodeBlock isInline={true}>
+        {codeContent}
+      </CodeBlock>
     );
   },
+  table({ children, ...props }: React.ComponentProps<'table'>) {
+    return (
+      <div className="overflow-x-auto my-4">
+        <table className="min-w-full border-collapse border border-[#FCF8DD]/30 rounded-lg overflow-hidden" {...props}>
+          {children}
+        </table>
+      </div>
+    );
+  },
+  thead({ children, ...props }: React.ComponentProps<'thead'>) {
+    return (
+      <thead className="bg-[#FCF8DD]/10" {...props}>
+        {children}
+      </thead>
+    );
+  },
+  tbody({ children, ...props }: React.ComponentProps<'tbody'>) {
+    return (
+      <tbody {...props}>
+        {children}
+      </tbody>
+    );
+  },
+  tr({ children, ...props }: React.ComponentProps<'tr'>) {
+    return (
+      <tr className="border-b border-[#FCF8DD]/20 hover:bg-[#FCF8DD]/5" {...props}>
+        {children}
+      </tr>
+    );
+  },
+  th({ children, ...props }: React.ComponentProps<'th'>) {
+    return (
+      <th className="px-4 py-3 text-left font-semibold text-[#FCF8DD] border-r border-[#FCF8DD]/20 last:border-r-0" {...props}>
+        {children}
+      </th>
+    );
+  },
+  td({ children, ...props }: React.ComponentProps<'td'>) {
+    return (
+      <td className="px-4 py-3 text-[#FCF8DD]/90 border-r border-[#FCF8DD]/10 last:border-r-0" {...props}>
+        {children}
+      </td>
+    );
+  },
+  blockquote({ children, ...props }: React.ComponentProps<'blockquote'>) {
+    return (
+      <blockquote className="border-l-4 border-[#FCF8DD]/50 pl-4 py-2 my-4 bg-[#FCF8DD]/5 rounded-r-lg italic" {...props}>
+        {children}
+      </blockquote>
+    );
+  },
+  ul({ children, ...props }: React.ComponentProps<'ul'>) {
+    return (
+      <ul className="list-disc list-inside my-3 space-y-1" {...props}>
+        {children}
+      </ul>
+    );
+  },
+  ol({ children, ...props }: React.ComponentProps<'ol'>) {
+    return (
+      <ol className="list-decimal list-inside my-3 space-y-1" {...props}>
+        {children}
+      </ol>
+    );
+  },
+  li({ children, ...props }: React.ComponentProps<'li'>) {
+    return (
+      <li className="text-[#FCF8DD]/90 leading-relaxed" {...props}>
+        {children}
+      </li>
+    );
+  },
+  h1({ children, ...props }: React.ComponentProps<'h1'>) {
+    return (
+      <h1 className="text-2xl font-bold text-[#FCF8DD] my-4 pb-2 border-b border-[#FCF8DD]/30" {...props}>
+        {children}
+      </h1>
+    );
+  },
+  h2({ children, ...props }: React.ComponentProps<'h2'>) {
+    return (
+      <h2 className="text-xl font-semibold text-[#FCF8DD] my-3 pb-1 border-b border-[#FCF8DD]/20" {...props}>
+        {children}
+      </h2>
+    );
+  },
+  h3({ children, ...props }: React.ComponentProps<'h3'>) {
+    return (
+      <h3 className="text-lg font-medium text-[#FCF8DD] my-3" {...props}>
+        {children}
+      </h3>
+    );
+  },
+  h4({ children, ...props }: React.ComponentProps<'h4'>) {
+    return (
+      <h4 className="text-base font-medium text-[#FCF8DD] my-2" {...props}>
+        {children}
+      </h4>
+    );
+  },
+  h5({ children, ...props }: React.ComponentProps<'h5'>) {
+    return (
+      <h5 className="text-sm font-medium text-[#FCF8DD] my-2" {...props}>
+        {children}
+      </h5>
+    );
+  },
+  h6({ children, ...props }: React.ComponentProps<'h6'>) {
+    return (
+      <h6 className="text-xs font-medium text-[#FCF8DD] my-2" {...props}>
+        {children}
+      </h6>
+    );
+  },
+  p({ children, ...props }: React.ComponentProps<'p'>) {
+    return (
+      <p className="leading-relaxed my-2" {...props}>
+        {children}
+      </p>
+    );
+  },
+  strong({ children, ...props }: React.ComponentProps<'strong'>) {
+    return (
+      <strong className="font-semibold text-[#FCF8DD]" {...props}>
+        {children}
+      </strong>
+    );
+  },
+  em({ children, ...props }: React.ComponentProps<'em'>) {
+    return (
+      <em className="italic text-[#FCF8DD]/90" {...props}>
+        {children}
+      </em>
+    );
+  },
+  a({ children, href, ...props }: React.ComponentProps<'a'>) {
+    return (
+      <a 
+        className="text-[#FCF8DD] underline hover:text-[#FCF8DD]/80 transition-colors" 
+        href={href} 
+        target="_blank" 
+        rel="noopener noreferrer"
+        {...props}
+      >
+        {children}
+      </a>
+    );
+  },
+  hr({ ...props }: React.ComponentProps<'hr'>) {
+    return (
+      <hr className="border-[#FCF8DD]/30 my-6" {...props} />
+    );
+  }
 };
 
 // main chat interface component - handles message display and user input
@@ -99,7 +310,12 @@ const CustomChat: React.FC<CustomChatProps> = ({
 
   useEffect(() => {
     if (chatFeedRef.current) {
-      chatFeedRef.current.scrollTop = chatFeedRef.current.scrollHeight;
+      const chatFeed = chatFeedRef.current;
+      const isScrolledToBottom = chatFeed.scrollHeight - chatFeed.scrollTop <= chatFeed.clientHeight + 100;
+      
+      if (isScrolledToBottom) {
+        chatFeed.scrollTop = chatFeed.scrollHeight;
+      }
     }
   }, [messages, isTyping, streamingMessage]);
 
@@ -255,9 +471,14 @@ const CustomChat: React.FC<CustomChatProps> = ({
       <div className="flex flex-col h-full">
         {/* Enhanced scanner title */}
         <div className="bg-[#112f5e] border-b border-[#FCF8DD]/10 px-6 py-4">
-          <span className="text-lg font-medium text-[#FCF8DD]">
-            {conversationTitle || presetConfig.title}
-          </span>
+          <div className="flex flex-col">
+            <span className="text-lg font-medium text-[#FCF8DD]">
+              {conversationTitle || presetConfig.title}
+            </span>
+            <span className="text-sm text-[#FCF8DD]/50 mt-1">
+              {presetConfig.model || 'gpt-4.1'} • {presetConfig.title}
+            </span>
+          </div>
         </div>
 
       <div 
@@ -268,15 +489,24 @@ const CustomChat: React.FC<CustomChatProps> = ({
           {messages.length === 0 && (
             <div className="text-center py-16">
               <div className="mb-6">
-                <div className="w-12 h-12 mx-auto rounded-xl bg-[#FCF8DD] flex items-center justify-center mb-4">
-                  <FaSearch className="text-[#112f5e] text-lg" />
+                <div 
+                  className="w-12 h-12 mx-auto rounded-xl flex items-center justify-center mb-4"
+                  style={{
+                    backgroundColor: presetConfig.subtitle ? presetConfig.theme.primary : '#FCF8DD'
+                  }}
+                >
+                  {presetConfig.subtitle ? (
+                    <FaComments className="text-white text-lg" />
+                  ) : (
+                    <FaSearch className="text-[#112f5e] text-lg" />
+                  )}
                 </div>
               </div>
               <h3 className="text-2xl font-semibold text-[#FCF8DD] mb-3">
                 {presetConfig.title}
               </h3>
               <p className="text-[#FCF8DD]/80 text-base leading-relaxed max-w-xl mx-auto">
-                Start a conversation using the preset configuration selected.
+                {presetConfig.subtitle || "Start a conversation using the preset configuration selected."}
               </p>
             </div>
           )}
@@ -295,8 +525,10 @@ const CustomChat: React.FC<CustomChatProps> = ({
                 }`}
               >
                 <ReactMarkdown
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[rehypeKatex]}
                   skipHtml={true}
-                  components={codeComponentConfig}
+                  components={markdownComponents}
                 >
                   {msg.message}
                 </ReactMarkdown>
@@ -309,8 +541,10 @@ const CustomChat: React.FC<CustomChatProps> = ({
               <div className="max-w-3xl text-[#FCF8DD] text-base leading-relaxed">
                 {streamingMessage ? (
                   <ReactMarkdown
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
                     skipHtml={true}
-                    components={codeComponentConfig}
+                    components={markdownComponents}
                   >
                     {streamingMessage}
                   </ReactMarkdown>
