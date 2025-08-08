@@ -37,6 +37,7 @@ const CodeBlock: React.FC<{ children: string; language?: string; isInline?: bool
     }
   };
 
+
   if (isInline) {
     return (
       <code className="bg-black/20 text-current px-2 py-1 rounded text-sm font-mono border border-current/20">
@@ -46,42 +47,47 @@ const CodeBlock: React.FC<{ children: string; language?: string; isInline?: bool
   }
 
   return (
-    <div className="relative group">
-      <button
-        onClick={copyToClipboard}
-        className="absolute top-3 right-3 z-10 bg-black/50 hover:bg-black/70 text-white p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center gap-2"
-        title={copied ? "Copied!" : "Copy code"}
-      >
-        {copied ? (
-          <>
-            <FaCheck className="text-green-400 text-sm" />
-            <span className="text-xs">Copied!</span>
-          </>
-        ) : (
-          <>
-            <FaCopy className="text-sm" />
-            <span className="text-xs">Copy</span>
-          </>
-        )}
-      </button>
-      <SyntaxHighlighter
-        style={vscDarkPlus}
-        language={language || 'text'}
-        PreTag="div"
-        customStyle={{
-          margin: '12px 0',
-          border: 'none',
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-          borderRadius: '12px',
-          padding: '16px',
-          paddingRight: '60px',
-          background: 'linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%)',
-          fontSize: '14px',
-          lineHeight: '1.6'
-        }}
-      >
-        {children.replace(/\n$/, "")}
-      </SyntaxHighlighter>
+    <div className="code-block-container my-4">
+      <div className="relative group">
+        <button
+          onClick={copyToClipboard}
+          className="absolute top-2 right-2 md:top-3 md:right-3 z-10 bg-black/50 hover:bg-black/70 text-white p-1.5 md:p-2 rounded-md md:rounded-lg opacity-100 transition-all duration-200 flex items-center gap-1 md:gap-2 text-xs md:text-sm"
+          title={copied ? "Copied!" : "Copy code"}
+        >
+          {copied ? (
+            <>
+              <FaCheck className="text-green-400 text-xs md:text-sm" />
+              <span className="hidden md:inline text-xs">Copied!</span>
+            </>
+          ) : (
+            <>
+              <FaCopy className="text-xs md:text-sm" />
+              <span className="hidden md:inline text-xs">Copy</span>
+            </>
+          )}
+        </button>
+        <div className="overflow-x-auto code-scroll-container">
+          <SyntaxHighlighter
+            style={vscDarkPlus}
+            language={language || 'text'}
+            PreTag="div"
+            customStyle={{
+              margin: '0',
+              border: 'none',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              borderRadius: '12px',
+              padding: '16px',
+              paddingRight: '60px',
+              background: 'linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%)',
+              fontSize: '14px',
+              lineHeight: '1.6'
+            }}
+            wrapLongLines={false}
+          >
+            {children.replace(/\n$/, "")}
+          </SyntaxHighlighter>
+        </div>
+      </div>
     </div>
   );
 };
@@ -480,7 +486,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
       {/* Regular Chat Layout */}
       <div className="flex flex-col h-full">
         {/* Enhanced scanner title */}
-        <div className="bg-[#112f5e] border-b border-[#FCF8DD]/10 px-6 py-4">
+        <div className="bg-[#112f5e] border-b border-[#FCF8DD]/10 px-6 py-4 md:pl-6 pl-16">
           <div className="flex flex-col">
             <span className="text-lg font-medium text-[#FCF8DD]">
               {conversationTitle || presetConfig.title}
@@ -528,10 +534,10 @@ const CustomChat: React.FC<CustomChatProps> = ({
               } mb-4`}
             >
               <div
-                className={`max-w-3xl ${
+                className={`${
                   msg.sender === "user"
-                    ? "bg-[#FCF8DD] text-[#112f5e] shadow-sm border border-[#FCF8DD]/20 rounded-lg px-3 py-3 leading-none [&_p]:my-0"
-                    : "text-[#FCF8DD] text-base leading-relaxed"
+                    ? "max-w-3xl bg-[#FCF8DD] text-[#112f5e] shadow-sm border border-[#FCF8DD]/20 rounded-lg px-3 py-3 leading-none [&_p]:my-0"
+                    : "max-w-4xl text-[#FCF8DD] text-base leading-relaxed px-3 md:px-6"
                 }`}
               >
                 <ReactMarkdown
@@ -548,7 +554,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
 
           {isTyping && (
             <div className="flex justify-start mb-4">
-              <div className="max-w-3xl text-[#FCF8DD] text-base leading-relaxed">
+              <div className="max-w-4xl text-[#FCF8DD] text-base leading-relaxed px-3 md:px-6">
                 {streamingMessage ? (
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkMath]}

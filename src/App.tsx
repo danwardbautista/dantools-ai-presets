@@ -463,7 +463,7 @@ const AppContent: React.FC = () => {
         {/* Mobile menu button - hide when menu is open */}
         {!isMobileMenuOpen && (
           <button 
-            className="md:hidden fixed top-4 left-4 z-30 bg-[#112f5e] text-[#FCF8DD] p-2 rounded-lg shadow-lg border border-[#FCF8DD]/20"
+            className="md:hidden fixed top-4 left-4 z-30 bg-[#FCF8DD]/10 text-[#FCF8DD]/80 p-2 rounded-lg shadow-lg border border-[#FCF8DD]/20 hover:bg-[#FCF8DD]/20 hover:text-[#FCF8DD] transition-all duration-300"
             onClick={toggleMobileMenu}
           >
             <FaBars className="text-sm" />
@@ -567,8 +567,8 @@ const PresetSelectionScreen: React.FC<PresetSelectionScreenProps> = ({ presets, 
   const favoritePresets = presets.filter(p => p.isFavorite);
 
   return (
-    <div className="h-screen bg-[#0d2549] flex items-center justify-center overflow-y-auto py-8">
-      <div className="text-center text-[#FCF8DD] max-w-4xl px-8">
+    <div className="h-screen bg-[#0d2549] flex md:items-center justify-center overflow-y-auto py-8">
+      <div className="text-center text-[#FCF8DD] max-w-4xl px-8 pt-8 md:pt-0">
         <h1 className="text-4xl font-bold mb-4">Start New Chat</h1>
         <p className="text-xl text-[#FCF8DD]/80 mb-8 leading-relaxed">
           Choose a preset to start a customized conversation
@@ -580,33 +580,33 @@ const PresetSelectionScreen: React.FC<PresetSelectionScreenProps> = ({ presets, 
             <h2 className="text-lg font-semibold text-[#FCF8DD]/90 mb-6">⭐ Your Favorites</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto">
               {favoritePresets.map((preset) => (
-                <button
+                <div
                   key={preset.id}
                   onClick={() => onSelectPreset(preset.id)}
-                  className="bg-[#112f5e] border-2 border-[#FCF8DD]/20 hover:border-[#FCF8DD]/40 rounded-xl overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-xl group text-left"
+                  className="group bg-[#112f5e] rounded-xl border border-[#FCF8DD]/20 hover:border-[#FCF8DD]/40 transition-all duration-300 overflow-hidden hover:scale-105 hover:shadow-xl cursor-pointer"
                 >
+                  {/* Color Header */}
                   <div 
                     className="h-2 w-full"
                     style={{ background: preset.theme.gradient }}
                   />
-                  <div className="p-4">
-                    <div className="flex items-center gap-2 mb-2">
+                  
+                  {/* Card Content */}
+                  <div className="p-4 pb-3">
+                    <div className="flex items-start justify-between gap-2 mb-2">
                       <h3 className="text-sm font-bold text-[#FCF8DD] leading-tight flex-1">{preset.title}</h3>
-                      <div className="text-yellow-400 text-xs">
-                        <FaStar />
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                          <span className="text-xs text-[#FCF8DD]/60">Click to start →</span>
+                        </div>
+                        <div className="text-yellow-400 bg-yellow-400/20 p-1.5 rounded-lg">
+                          <FaStar className="text-sm" />
+                        </div>
                       </div>
                     </div>
-                    <p className="text-xs text-[#FCF8DD]/70 leading-relaxed mb-3">{preset.subtitle}</p>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-[#FCF8DD]/50 bg-[#FCF8DD]/10 px-2 py-1 rounded font-mono">
-                        {preset.model || 'gpt-4.1'}
-                      </span>
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                        <span className="text-xs text-[#FCF8DD]/60">Click to start →</span>
-                      </div>
-                    </div>
+                    <p className="text-xs text-[#FCF8DD]/70 leading-relaxed">{preset.subtitle}</p>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           </div>

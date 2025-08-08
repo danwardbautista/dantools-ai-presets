@@ -96,3 +96,50 @@ nav ul::before, nav ol::before, nav li::before {
 .scrollbar-thin::-webkit-scrollbar-button {
   display: none;
 }
+
+/* Code block mobile layout*/
+.code-block-container {
+  width: 100vw;
+  margin-left: calc(-50vw + 50%);
+  position: relative;
+}
+
+@media (min-width: 768px) {
+  .code-block-container {
+    width: calc(100% + 3rem);
+    margin-left: -1.5rem;
+  }
+}
+
+.code-scroll-container {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.code-scroll-container::-webkit-scrollbar {
+  height: 6px;
+}
+
+.code-scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.code-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.code-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+@media (max-width: 768px) {
+  .code-scroll-container::-webkit-scrollbar {
+    height: 4px !important;
+  }
+  
+  .code-scroll-container {
+    -webkit-overflow-scrolling: touch !important;
+  }
+}
+
