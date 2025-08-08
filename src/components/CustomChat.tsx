@@ -87,7 +87,7 @@ const CodeBlock: React.FC<{ children: string; language?: string; isInline?: bool
 };
 
 const markdownComponents = {
-  code({ className, children, ...props }: React.ComponentProps<'code'>) {
+  code({ className, children }: React.ComponentProps<'code'>) {
     const match = /language-(\w+)/.exec(className || "");
     const codeContent = String(children);
     
@@ -318,6 +318,16 @@ const CustomChat: React.FC<CustomChatProps> = ({
       }
     }
   }, [messages, isTyping, streamingMessage]);
+
+  // force scroll to bottom when opening a chat )
+  useEffect(() => {
+    if (chatFeedRef.current) {
+      const chatFeed = chatFeedRef.current;
+      setTimeout(() => {
+        chatFeed.scrollTop = chatFeed.scrollHeight;
+      }, 50);
+    }
+  }, [scannerType]); // trigger only on switch?
 
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {

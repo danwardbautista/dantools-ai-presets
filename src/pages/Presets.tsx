@@ -73,7 +73,8 @@ const Presets: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0d2549] p-8">
+    <div className="h-screen bg-[#0d2549] overflow-y-auto">
+      <div className="p-4 md:p-8">
       {/* Header Section */}
       <div className="max-w-7xl mx-auto mb-6">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -81,20 +82,20 @@ const Presets: React.FC = () => {
             <h1 className="text-3xl font-bold text-[#FCF8DD] mb-2">Chat Presets</h1>
             <p className="text-lg text-[#FCF8DD]/70">Create and manage your AI assistant configurations</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <button
               onClick={() => {
                 setEditingPreset(null);
                 setShowPresetModal(true);
               }}
-              className="bg-[#FCF8DD] hover:bg-[#FCF8DD]/90 text-[#112f5e] px-6 py-3 rounded-lg transition-all duration-200 flex items-center gap-2 font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
+              className="bg-[#FCF8DD] hover:bg-[#FCF8DD]/90 text-[#112f5e] px-6 py-3 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
             >
               <FaPlus className="text-sm" />
               Create New Preset
             </button>
             <button
               onClick={() => setShowDeleteModal(true)}
-              className="bg-red-500/20 hover:bg-red-500/30 text-red-300 hover:text-red-200 px-4 py-3 rounded-lg transition-all duration-200 flex items-center gap-2 border border-red-500/30 hover:border-red-500/50"
+              className="bg-red-500/20 hover:bg-red-500/30 text-red-300 hover:text-red-200 px-4 py-3 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 border border-red-500/30 hover:border-red-500/50"
             >
               <FaTrash className="text-xs" />
               Delete All
@@ -105,7 +106,7 @@ const Presets: React.FC = () => {
 
       {/* Presets Grid */}
       <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
           {presets.map((preset) => (
             <div
               key={preset.id}
@@ -281,6 +282,7 @@ const Presets: React.FC = () => {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };

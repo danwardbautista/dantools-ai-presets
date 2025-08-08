@@ -12,6 +12,7 @@ const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentScannerType, setCurrentScannerType] = useState<ScannerType | null>(null);
   const [presets, setPresets] = useState<PresetConfig[]>(defaultPresets);
@@ -46,6 +47,30 @@ const AppContent: React.FC = () => {
   const toggleSidebar = () => {
     setIsCollapsed(!isCollapsed);
   };
+
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  const closeMobileMenu = () => {
+    setIsMobileMenuOpen(false);
+  };
+
+  useEffect(() => {
+    closeMobileMenu();
+  }, [location.pathname]);
+
+  // close mobile menu on window resize to desktop
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768) {
+        closeMobileMenu();
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const loadedConversations: Record<ScannerType, SavedConversation[]> = {};
@@ -182,6 +207,7 @@ const AppContent: React.FC = () => {
     setCurrentMessages(prev => ({ ...prev, [scannerType]: conversation.messages }));
     setCurrentScannerType(scannerType);
     navigate('/'); // Navigate to home route to show the conversation
+    closeMobileMenu();
     // track saved message count
     lastSavedMessageCountRef.current[scannerType] = conversation.messages.length;
     // clear loading after delay
@@ -203,6 +229,7 @@ const AppContent: React.FC = () => {
     setCurrentMessages(prev => ({ ...prev, [scannerType]: [] }));
     setCurrentScannerType(scannerType);
     navigate('/');
+    closeMobileMenu();
     // reset message count for new convo
     lastSavedMessageCountRef.current[scannerType] = 0;
     // clear loading
@@ -216,6 +243,7 @@ const AppContent: React.FC = () => {
   const showPresetSelectionScreen = () => {
     setCurrentScannerType(null);
     navigate('/');
+    closeMobileMenu();
   };
 
   // gets display title for current conversation
@@ -282,26 +310,48 @@ const AppContent: React.FC = () => {
   };
 
   return (
-      <div className="flex h-screen overflow-hidden bg-[#FCF8DD]">
-        <div className={`${isCollapsed ? 'w-20' : 'w-72'} fixed left-0 top-0 h-full bg-[#112f5e] border-r border-[#FCF8DD]/20 shadow-xl z-50 transition-all duration-300 ease-in-out flex flex-col`}>
+    <div className="flex h-screen overflow-hidden bg-[#FCF8DD]">
+        {/* Mobile backdrop */}
+        {isMobileMenuOpen && (
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden" 
+            onClick={closeMobileMenu}
+          />
+        )}
+        
+        {/* Sidebar */}
+        <div className={`
+          ${isCollapsed ? 'md:w-20 w-72' : 'w-72'} 
+          fixed left-0 top-0 h-full bg-[#112f5e] border-r border-[#FCF8DD]/20 shadow-xl z-50 transition-all duration-300 ease-in-out flex flex-col
+          ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+        `}>
           <div className="flex items-center justify-between p-5 border-b border-[#FCF8DD]/20 min-h-[80px]">
             <div className="flex items-center gap-3 transition-all duration-300">
               <div className="w-10 h-10 bg-gradient-to-br from-[#FCF8DD] to-[#FCF8DD]/90 rounded-xl flex items-center justify-center shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300">
                 <span className="text-[#112f5e] font-bold text-lg">DT</span>
               </div>
-              {!isCollapsed && <h1 className="text-[#FCF8DD] text-xl font-semibold">DanTools</h1>}
+              <h1 className={`text-[#FCF8DD] text-xl font-semibold block ${isCollapsed ? 'md:hidden' : 'md:block'}`}>DanTools</h1>
             </div>
+            {/* Desktop toggle button */}
             <button 
-              className="bg-[#FCF8DD]/10 text-[#FCF8DD]/80 border border-[#FCF8DD]/20 rounded-lg p-2 hover:bg-[#FCF8DD]/20 hover:text-[#FCF8DD] hover:scale-105 transition-all duration-300 w-9 h-9 flex items-center justify-center"
+              className="hidden md:flex bg-[#FCF8DD]/10 text-[#FCF8DD]/80 border border-[#FCF8DD]/20 rounded-lg p-2 hover:bg-[#FCF8DD]/20 hover:text-[#FCF8DD] hover:scale-105 transition-all duration-300 w-9 h-9 items-center justify-center"
               onClick={toggleSidebar}
             >
               {isCollapsed ? <FaBars className="text-sm" /> : <FaChevronRight className={`text-sm transition-transform duration-300 ${!isCollapsed ? 'rotate-180' : ''}`} />}
+            </button>
+            
+            {/* Mobile close button */}
+            <button 
+              className="md:hidden bg-[#FCF8DD]/10 text-[#FCF8DD]/80 border border-[#FCF8DD]/20 rounded-lg p-2 hover:bg-[#FCF8DD]/20 hover:text-[#FCF8DD] transition-all duration-300 w-9 h-9 flex items-center justify-center"
+              onClick={closeMobileMenu}
+            >
+              <FaChevronRight className="text-sm" />
             </button>
           </div>
           
           <nav className="flex-1 px-4 py-6 flex flex-col min-h-0">
             <ul className="flex flex-col gap-2 flex-shrink-0">
-              <NavItem to="/presets" label="Presets" icon={<FaCog />} isCollapsed={isCollapsed} disabled={isGenerating} />
+              <NavItem to="/presets" label="Presets" icon={<FaCog />} isCollapsed={isCollapsed} disabled={isGenerating} onMobileClick={closeMobileMenu} />
               <li className="relative">
                 <button 
                   type="button"
@@ -311,7 +361,7 @@ const AppContent: React.FC = () => {
                       ? 'bg-[#FCF8DD] text-[#112f5e] font-semibold shadow-lg' 
                       : 'text-[#FCF8DD]/80 hover:bg-[#FCF8DD] hover:text-[#112f5e] hover:translate-x-1'
                     }
-                    ${isCollapsed ? 'justify-center px-3' : ''}
+                    ${isCollapsed ? 'md:justify-center md:px-3' : ''}
                   `}
                   onClick={(e) => {
                     e.preventDefault();
@@ -319,25 +369,25 @@ const AppContent: React.FC = () => {
                     showPresetSelectionScreen();
                   }}
                 >
-                  <span className={`flex items-center justify-center text-lg ${isCollapsed ? '' : 'min-w-5'}`}>
+                  <span className={`flex items-center justify-center text-lg ${isCollapsed ? 'md:min-w-auto' : 'min-w-5'}`}>
                     <FaPlus />
                   </span>
-                  {!isCollapsed && <span className="ml-4 font-medium text-sm">New Chat</span>}
-                  {!currentScannerType && location.pathname === '/' && !isCollapsed && (
-                    <div className="ml-auto w-1.5 h-1.5 bg-[#112f5e] rounded-full shadow-lg animate-pulse" />
-                  )}
+                  <span className={`ml-4 font-medium text-sm ${isCollapsed ? 'md:hidden' : 'block'}`}>New Chat</span>
+                  <div className={`ml-auto w-1.5 h-1.5 bg-[#112f5e] rounded-full shadow-lg animate-pulse ${
+                    !currentScannerType && location.pathname === '/' ? 
+                    (isCollapsed ? 'md:hidden' : 'block') : 'hidden'
+                  }`} />
                 </button>
-                {isCollapsed && (
-                  <div className="absolute left-16 top-1/2 transform -translate-y-1/2 bg-[#112f5e] text-[#FCF8DD] px-3 py-1.5 rounded-lg text-sm font-medium opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-300 whitespace-nowrap border border-[#FCF8DD]/30 shadow-lg">
-                    New Chat
-                    <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-[#112f5e] rotate-45 border-l border-b border-[#FCF8DD]/30"></div>
-                  </div>
-                )}
+                <div className={`absolute left-16 top-1/2 transform -translate-y-1/2 bg-[#112f5e] text-[#FCF8DD] px-3 py-1.5 rounded-lg text-sm font-medium opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-300 whitespace-nowrap border border-[#FCF8DD]/30 shadow-lg ${
+                  isCollapsed ? 'hidden md:block' : 'hidden'
+                }`}>
+                  New Chat
+                  <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-[#112f5e] rotate-45 border-l border-b border-[#FCF8DD]/30"></div>
+                </div>
               </li>
             </ul>
             
-            {!isCollapsed && (
-              <div className="mt-6 flex-1 flex flex-col min-h-0 overflow-hidden">
+            <div className={`mt-6 flex-1 flex flex-col min-h-0 overflow-hidden ${isCollapsed ? 'md:hidden' : 'block'}`}>
                 <div className="flex items-center justify-between px-4 pb-3 border-b border-[#FCF8DD]/20 mb-4">
                   <h3 className="text-sm font-semibold text-[#FCF8DD]/80 uppercase tracking-wider">Recent Chats</h3>
                   <button 
@@ -395,48 +445,56 @@ const AppContent: React.FC = () => {
                   )}
                 </div>
               </div>
-            )}
           </nav>
 
           <div className="p-5 border-t border-[#FCF8DD]/20">
-            <div className={`flex items-center gap-3 transition-all duration-300 ${isCollapsed ? 'justify-center' : ''}`}>
+            <div className={`flex items-center gap-3 transition-all duration-300 ${isCollapsed ? 'md:justify-center' : ''}`}>
               <div className="w-9 h-9 bg-gradient-to-br from-[#FCF8DD] to-[#FCF8DD]/80 rounded-full flex items-center justify-center text-[#112f5e] font-semibold text-sm shadow-lg">
                 U
               </div>
-              {!isCollapsed && (
-                <div className="transition-all duration-300">
-                  <div className="text-[#FCF8DD] font-medium text-sm">DanTools User</div>
-                  <div className="text-[#FCF8DD]/70 text-xs">Power User</div>
-                </div>
-              )}
+              <div className={`transition-all duration-300 ${isCollapsed ? 'md:hidden' : 'block'}`}>
+                <div className="text-[#FCF8DD] font-medium text-sm">DanTools User</div>
+                <div className="text-[#FCF8DD]/70 text-xs">Power User</div>
+              </div>
             </div>
           </div>
         </div>
         
-        <div className={`flex-1 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-72'}`}>
+        {/* Mobile menu button - hide when menu is open */}
+        {!isMobileMenuOpen && (
+          <button 
+            className="md:hidden fixed top-4 left-4 z-30 bg-[#112f5e] text-[#FCF8DD] p-2 rounded-lg shadow-lg border border-[#FCF8DD]/20"
+            onClick={toggleMobileMenu}
+          >
+            <FaBars className="text-sm" />
+          </button>
+        )}
+        
+        <div className={`flex-1 transition-all duration-300 ${isCollapsed ? 'md:ml-20' : 'md:ml-72'}`}>
           <Routes>
             <Route path="/" element={
-              currentScannerType ? (
-                <CustomChat 
-                  messages={currentMessages[currentScannerType] || []}
-                  setMessages={(messagesAction) => setCurrentMessages(prev => ({ 
-                    ...prev, 
-                    [currentScannerType]: typeof messagesAction === 'function' ? messagesAction(prev[currentScannerType] || []) : messagesAction 
-                  }))}
-                  setIsGenerating={setIsGenerating}
-                  scannerType={currentScannerType}
-                  presetConfig={findPresetById(presets, currentScannerType)!}
-                  conversationTitle={getCurrentConversationTitle(currentScannerType, currentMessages[currentScannerType] || [])}
-                />
-              ) : (
-                <PresetSelectionScreen presets={presets} onSelectPreset={selectPreset} />
-              )
+              <div>
+                {currentScannerType ? (
+                  <CustomChat 
+                    messages={currentMessages[currentScannerType] || []}
+                    setMessages={(messagesAction) => setCurrentMessages(prev => ({ 
+                      ...prev, 
+                      [currentScannerType]: typeof messagesAction === 'function' ? messagesAction(prev[currentScannerType] || []) : messagesAction 
+                    }))}
+                    setIsGenerating={setIsGenerating}
+                    scannerType={currentScannerType}
+                    presetConfig={findPresetById(presets, currentScannerType)!}
+                    conversationTitle={getCurrentConversationTitle(currentScannerType, currentMessages[currentScannerType] || [])}
+                  />
+                ) : (
+                  <PresetSelectionScreen presets={presets} onSelectPreset={selectPreset} />
+                )}
+              </div>
             } />
             <Route path="/presets" element={<Presets />} />
           </Routes>
         </div>
-
-      </div>
+    </div>
   );
 };
 
@@ -446,10 +504,11 @@ interface NavItemProps {
   icon: React.ReactNode;
   isCollapsed: boolean;
   disabled?: boolean;
+  onMobileClick?: () => void;
 }
 
 
-const NavItem: React.FC<NavItemProps> = ({ to, label, icon, isCollapsed, disabled = false }) => {
+const NavItem: React.FC<NavItemProps> = ({ to, label, icon, isCollapsed, disabled = false, onMobileClick }) => {
   const location = useLocation();
   const isActive = location.pathname === to;
 
@@ -457,6 +516,8 @@ const NavItem: React.FC<NavItemProps> = ({ to, label, icon, isCollapsed, disable
     if (disabled) {
       e.preventDefault();
       alert('wait for analysis to finish');
+    } else if (onMobileClick) {
+      onMobileClick();
     }
   };
 
@@ -472,24 +533,24 @@ const NavItem: React.FC<NavItemProps> = ({ to, label, icon, isCollapsed, disable
               ? 'text-[#FCF8DD]/50 cursor-not-allowed opacity-50' 
               : 'text-[#FCF8DD]/80 hover:bg-[#FCF8DD] hover:text-[#112f5e] hover:translate-x-1'
           }
-          ${isCollapsed ? 'justify-center px-3' : ''}
+          ${isCollapsed ? 'md:justify-center md:px-3' : ''}
         `}
         onClick={onClick}
       >
-        <span className={`flex items-center justify-center text-lg ${isCollapsed ? '' : 'min-w-5'}`}>
+        <span className={`flex items-center justify-center text-lg ${isCollapsed ? 'md:min-w-auto' : 'min-w-5'}`}>
           {icon}
         </span>
-        {!isCollapsed && <span className="ml-4 font-medium text-sm">{label}</span>}
-        {isActive && !isCollapsed && (
-          <div className="ml-auto w-1.5 h-1.5 bg-[#112f5e] rounded-full shadow-lg animate-pulse" />
-        )}
+        <span className={`ml-4 font-medium text-sm ${isCollapsed ? 'md:hidden' : 'block'}`}>{label}</span>
+        <div className={`ml-auto w-1.5 h-1.5 bg-[#112f5e] rounded-full shadow-lg animate-pulse ${
+          isActive ? (isCollapsed ? 'md:hidden' : 'block') : 'hidden'
+        }`} />
       </Link>
-      {isCollapsed && (
-        <div className="absolute left-16 top-1/2 transform -translate-y-1/2 bg-[#112f5e] text-[#FCF8DD] px-3 py-1.5 rounded-lg text-sm font-medium opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-300 whitespace-nowrap border border-[#FCF8DD]/30 shadow-lg z-50">
-          {label}
-          <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-[#112f5e] rotate-45 border-l border-b border-[#FCF8DD]/30"></div>
-        </div>
-      )}
+      <div className={`absolute left-16 top-1/2 transform -translate-y-1/2 bg-[#112f5e] text-[#FCF8DD] px-3 py-1.5 rounded-lg text-sm font-medium opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-300 whitespace-nowrap border border-[#FCF8DD]/30 shadow-lg z-50 ${
+        isCollapsed ? 'hidden md:block' : 'hidden'
+      }`}>
+        {label}
+        <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-[#112f5e] rotate-45 border-l border-b border-[#FCF8DD]/30"></div>
+      </div>
     </li>
   );
 };
