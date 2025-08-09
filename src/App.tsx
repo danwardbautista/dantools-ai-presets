@@ -2,11 +2,14 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { FaCog, FaBars, FaChevronRight, FaPlus, FaStar } from 'react-icons/fa';
 import CustomChat from './components/CustomChat';
+import ApiKeyModal from './components/ApiKeyModal';
+import SettingsModal from './components/SettingsModal';
 import Presets from './pages/Presets';
 import { ChatMessage, PresetConfig, SavedConversation, ScannerType } from './types';
 import { defaultPresets, findPresetById } from './utils/presets';
 import { makeConversationTitle, ensureUniqueTitle, findExistingConversation, makeConversation, sortConversationsByTimestamp } from './utils/conversation';
 import { loadFromStorage, saveToStorage, removeFromStorage } from './utils/localStorage';
+import { apiKeyManager } from './utils/apiKeyManager';
 
 const AppContent: React.FC = () => {
   const navigate = useNavigate();
@@ -16,6 +19,8 @@ const AppContent: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentScannerType, setCurrentScannerType] = useState<ScannerType | null>(null);
   const [presets, setPresets] = useState<PresetConfig[]>(defaultPresets);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   
   // keep conversations separate per scanner type
   const [savedConversations, setSavedConversations] = useState<Record<ScannerType, SavedConversation[]>>({});
@@ -25,10 +30,15 @@ const AppContent: React.FC = () => {
   const currentMessagesRef = useRef<Record<ScannerType, ChatMessage[]>>(currentMessages);
   const lastSavedMessageCountRef = useRef<Record<ScannerType, number>>({});
 
-  // Load presets from localStorage on mount
+  // Load presets from localStorage on mount and check for API key
   useEffect(() => {
     const savedPresets = loadFromStorage('dantools-presets', defaultPresets);
     setPresets(savedPresets);
+    
+    // Check if user needs to set up API key
+    if (!apiKeyManager.hasApiKey()) {
+      setShowApiKeyModal(true);
+    }
   }, []);
 
   // watch for preset changes from the presets page
@@ -246,6 +256,23 @@ const AppContent: React.FC = () => {
     closeMobileMenu();
   };
 
+  const handleApiKeySave = () => {
+    setShowApiKeyModal(false);
+  };
+
+  const handleApiKeySkip = () => {
+    setShowApiKeyModal(false);
+  };
+
+  const handleOpenSettings = () => {
+    setShowSettingsModal(true);
+    closeMobileMenu();
+  };
+
+  const handleCloseSettings = () => {
+    setShowSettingsModal(false);
+  };
+
   // gets display title for current conversation
   const getCurrentConversationTitle = (scannerType: ScannerType, messages: ChatMessage[]): string => {
     const preset = findPresetById(presets, scannerType);
@@ -311,6 +338,15 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#FCF8DD]">
+        <ApiKeyModal 
+          isOpen={showApiKeyModal}
+          onSave={handleApiKeySave}
+          onSkip={handleApiKeySkip}
+        />
+        <SettingsModal 
+          isOpen={showSettingsModal}
+          onClose={handleCloseSettings}
+        />
         {/* Mobile backdrop */}
         {isMobileMenuOpen && (
           <div 
@@ -447,16 +483,22 @@ const AppContent: React.FC = () => {
               </div>
           </nav>
 
-          <div className="p-5 border-t border-[#FCF8DD]/20">
-            <div className={`flex items-center gap-3 transition-all duration-300 ${isCollapsed ? 'md:justify-center' : ''}`}>
-              <div className="w-9 h-9 bg-gradient-to-br from-[#FCF8DD] to-[#FCF8DD]/80 rounded-full flex items-center justify-center text-[#112f5e] font-semibold text-sm shadow-lg">
-                U
+          <div className="p-3 border-t border-[#FCF8DD]/20 bg-[#0d2549]/30">
+            <button 
+              onClick={handleOpenSettings}
+              className={`
+                w-full flex items-center gap-3 transition-all duration-300 rounded-xl p-2 -m-2
+                hover:bg-[#FCF8DD]/10 text-[#FCF8DD] hover:text-[#FCF8DD]
+                ${isCollapsed ? 'md:justify-center' : ''}
+              `}
+            >
+              <div className="w-8 h-8 bg-gradient-to-br from-[#FCF8DD] to-[#FCF8DD]/80 rounded-full flex items-center justify-center text-[#112f5e] font-semibold text-sm shadow-lg">
+                <FaCog />
               </div>
-              <div className={`transition-all duration-300 ${isCollapsed ? 'md:hidden' : 'block'}`}>
-                <div className="text-[#FCF8DD] font-medium text-sm">DanTools User</div>
-                <div className="text-[#FCF8DD]/70 text-xs">Power User</div>
+              <div className={`transition-all duration-300 ${isCollapsed ? 'md:hidden' : 'block'} flex items-center`}>
+                <div className="font-medium text-sm">Settings</div>
               </div>
-            </div>
+            </button>
           </div>
         </div>
         

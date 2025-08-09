@@ -8,7 +8,7 @@ import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { FaSearch, FaComments, FaCopy, FaCheck } from "react-icons/fa";
 import 'katex/dist/katex.min.css';
 import { ChatMessage, PresetConfig } from '../types';
-import { openai, sanitizeInput } from '../utils/openai';
+import { getOpenAIClient, sanitizeInput } from '../utils/openai';
 import { adjustTextareaHeight } from '../utils/dom';
 
 export interface CustomChatProps {
@@ -350,8 +350,14 @@ const CustomChat: React.FC<CustomChatProps> = ({
       const chatFeed = chatFeedRef.current;
       const isScrolledToBottom = chatFeed.scrollHeight - chatFeed.scrollTop <= chatFeed.clientHeight + 100;
       
-      if (isScrolledToBottom) {
-        chatFeed.scrollTop = chatFeed.scrollHeight;
+      // Always scroll during streaming (AI responding) or when at bottom
+      if (isScrolledToBottom || streamingMessage) {
+        // Use requestAnimationFrame for smoother scrolling during streaming
+        requestAnimationFrame(() => {
+          if (chatFeed) {
+            chatFeed.scrollTop = chatFeed.scrollHeight;
+          }
+        });
       }
     }
   }, [messages, isTyping, streamingMessage]);
@@ -453,6 +459,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
     ];
 
     try {
+      const openai = getOpenAIClient();
       const stream = await openai.chat.completions.create({
         model: "gpt-4.1",
         messages: conversationPayload,
@@ -464,6 +471,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
 
       // stream response chunks and update ui in real time
       let fullResponse = "";
+      let chunkCount = 0;
       for await (const chunk of stream) {
         if (controller.signal.aborted) break;
         
@@ -471,6 +479,16 @@ const CustomChat: React.FC<CustomChatProps> = ({
         if (content) {
           fullResponse += content;
           setStreamingMessage(fullResponse);
+          
+          // Force scroll every few chunks for smoother experience
+          chunkCount++;
+          if (chunkCount % 3 === 0 && chatFeedRef.current) {
+            requestAnimationFrame(() => {
+              if (chatFeedRef.current) {
+                chatFeedRef.current.scrollTop = chatFeedRef.current.scrollHeight;
+              }
+            });
+          }
         }
       }
 
@@ -484,11 +502,23 @@ const CustomChat: React.FC<CustomChatProps> = ({
     } catch (e: unknown) {
       // api call failed
       if (e instanceof Error && e.name !== 'AbortError') {
+        let errorMessage = "Something went wrong, try again";
+        
+        if (e.message.includes('Invalid OpenAI API key') || e.message.includes('API key')) {
+          errorMessage = "Invalid OpenAI API key. Please configure your API key in the settings.";
+        } else if (e.message.includes('401')) {
+          errorMessage = "Invalid OpenAI API key. Please check your API key and try again.";
+        } else if (e.message.includes('quota') || e.message.includes('billing')) {
+          errorMessage = "OpenAI API quota exceeded. Please check your OpenAI account billing.";
+        } else if (e.message.includes('rate limit')) {
+          errorMessage = "Rate limit exceeded. Please wait a moment and try again.";
+        }
+        
         setMessages((prev) => [
           ...prev,
           {
             sender: "bot",
-            message: "something went wrong, try again",
+            message: errorMessage,
           },
         ]);
       }

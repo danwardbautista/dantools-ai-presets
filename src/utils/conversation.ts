@@ -1,5 +1,5 @@
 import { ChatMessage, SavedConversation } from '../types';
-import { openai } from './openai';
+import { getOpenAIClient } from './openai';
 
 // conversation helpers
 
@@ -24,6 +24,7 @@ export const makeConversationTitle = async (messages: ChatMessage[], scannerTitl
 
       Return only the title, nothing else.`;
 
+    const openai = getOpenAIClient();
     const response = await openai.chat.completions.create({
       model: "gpt-4.1-nano",
       messages: [
