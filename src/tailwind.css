@@ -66,6 +66,7 @@ nav ul::before, nav ol::before, nav li::before {
   list-style-type: none !important;
 }
 
+
 /* Custom Scrollbar Styling */
 .scrollbar-thin {
   scrollbar-width: thin;
@@ -140,6 +141,14 @@ nav ul::before, nav ol::before, nav li::before {
   
   .code-scroll-container {
     -webkit-overflow-scrolling: touch !important;
+  }
+  
+  /* Improved mobile command block styling */
+  code {
+    word-break: break-all !important;
+    max-width: 100% !important;
+    overflow-wrap: break-word !important;
+    white-space: pre-wrap !important;
   }
 }
 

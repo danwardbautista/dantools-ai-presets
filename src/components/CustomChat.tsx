@@ -26,6 +26,18 @@ const CodeBlock: React.FC<{ children: string; language?: string; isInline?: bool
   isInline = false 
 }) => {
   const [copied, setCopied] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
 
   const copyToClipboard = async () => {
     try {
@@ -40,9 +52,28 @@ const CodeBlock: React.FC<{ children: string; language?: string; isInline?: bool
 
   if (isInline) {
     return (
-      <code className="bg-black/20 text-current px-2 py-1 rounded text-sm font-mono border border-current/20">
-        {children}
-      </code>
+      <div className="relative inline-block group">
+        <code className="bg-black/20 text-current px-2 py-1 rounded-md text-sm font-mono border border-current/20 break-all max-w-full inline-block pr-8">
+          {children}
+        </code>
+        <button
+          onClick={copyToClipboard}
+          className="absolute -top-2 right-2 opacity-0 group-hover:opacity-100 bg-black/60 hover:bg-black/80 text-white px-1.5 py-0.5 rounded-md text-xs transition-all duration-200 flex items-center gap-1 border border-white/20"
+          title={copied ? "Copied!" : "Copy"}
+        >
+          {copied ? (
+            <>
+              <FaCheck className="text-green-400 text-xs" />
+              <span className="text-xs">Copied!</span>
+            </>
+          ) : (
+            <>
+              <FaCopy className="text-xs" />
+              <span className="text-xs">Copy</span>
+            </>
+          )}
+        </button>
+      </div>
     );
   }
 
@@ -51,18 +82,18 @@ const CodeBlock: React.FC<{ children: string; language?: string; isInline?: bool
       <div className="relative group">
         <button
           onClick={copyToClipboard}
-          className="absolute top-2 right-2 md:top-3 md:right-3 z-10 bg-black/50 hover:bg-black/70 text-white p-1.5 md:p-2 rounded-md md:rounded-lg opacity-100 transition-all duration-200 flex items-center gap-1 md:gap-2 text-xs md:text-sm"
+          className="absolute -top-2 right-2 z-10 bg-black/60 hover:bg-black/80 text-white px-1.5 py-0.5 rounded-md transition-all duration-200 flex items-center gap-1 text-xs border border-white/20"
           title={copied ? "Copied!" : "Copy code"}
         >
           {copied ? (
             <>
-              <FaCheck className="text-green-400 text-xs md:text-sm" />
-              <span className="hidden md:inline text-xs">Copied!</span>
+              <FaCheck className="text-green-400 text-xs" />
+              <span className="text-xs">Copied!</span>
             </>
           ) : (
             <>
-              <FaCopy className="text-xs md:text-sm" />
-              <span className="hidden md:inline text-xs">Copy</span>
+              <FaCopy className="text-xs" />
+              <span className="text-xs">Copy</span>
             </>
           )}
         </button>
@@ -75,14 +106,14 @@ const CodeBlock: React.FC<{ children: string; language?: string; isInline?: bool
               margin: '0',
               border: 'none',
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-              borderRadius: '12px',
+              borderRadius: '8px',
               padding: '16px',
               paddingRight: '60px',
               background: 'linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%)',
               fontSize: '14px',
               lineHeight: '1.6'
             }}
-            wrapLongLines={false}
+            wrapLongLines={isMobile}
           >
             {children.replace(/\n$/, "")}
           </SyntaxHighlighter>
@@ -498,7 +529,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
         </div>
 
       <div 
-        className="flex-1 overflow-y-auto px-4 py-6 chat-scroll scrollbar-thin scrollbar-track-[#0d2549] scrollbar-thumb-[#FCF8DD]/30 hover:scrollbar-thumb-[#FCF8DD]/50" 
+        className="flex-1 overflow-y-auto px-2 md:px-4 py-6 chat-scroll scrollbar-thin scrollbar-track-[#0d2549] scrollbar-thumb-[#FCF8DD]/30 hover:scrollbar-thumb-[#FCF8DD]/50" 
         ref={chatFeedRef}
       >
         <div className="max-w-4xl mx-auto space-y-6">
@@ -536,8 +567,8 @@ const CustomChat: React.FC<CustomChatProps> = ({
               <div
                 className={`${
                   msg.sender === "user"
-                    ? "max-w-3xl bg-[#FCF8DD] text-[#112f5e] shadow-sm border border-[#FCF8DD]/20 rounded-lg px-3 py-3 leading-none [&_p]:my-0"
-                    : "max-w-4xl text-[#FCF8DD] text-base leading-relaxed px-3 md:px-6"
+                    ? "max-w-3xl w-full md:w-auto bg-[#FCF8DD] text-[#112f5e] shadow-sm border border-[#FCF8DD]/20 rounded-lg px-3 py-3 leading-none [&_p]:my-0"
+                    : "max-w-4xl w-full md:w-auto text-[#FCF8DD] text-base leading-relaxed px-3 md:px-6 overflow-hidden"
                 }`}
               >
                 <ReactMarkdown
@@ -554,7 +585,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
 
           {isTyping && (
             <div className="flex justify-start mb-4">
-              <div className="max-w-4xl text-[#FCF8DD] text-base leading-relaxed px-3 md:px-6">
+              <div className="max-w-4xl w-full md:w-auto text-[#FCF8DD] text-base leading-relaxed px-3 md:px-6 overflow-hidden">
                 {streamingMessage ? (
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkMath]}
