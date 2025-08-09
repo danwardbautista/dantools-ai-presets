@@ -429,7 +429,12 @@ const AppContent: React.FC = () => {
                   <button 
                     className="text-xs text-[#FCF8DD]/60 hover:text-red-400 hover:bg-red-500/10 px-2 py-1 rounded-md transition-colors duration-200"
                     onClick={() => {
+                      // clear all saved conversations
                       presets.forEach(preset => clearHistory(preset.id));
+                      // clear current active messages and reset to preset selection
+                      setCurrentMessages({});
+                      setCurrentScannerType(null);
+                      navigate('/');
                     }}
                   >
                     Clear All

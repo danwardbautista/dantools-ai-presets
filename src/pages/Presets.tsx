@@ -46,11 +46,16 @@ const Presets: React.FC = () => {
     }
   };
 
-  // wipe everything from localStorage
+  // wipe presets and conversations from localStorage
   const deleteAllPresets = () => {
     if (deleteConfirmText === 'DELETE') {
-      // clear all localStorage data
-      localStorage.clear();
+      // clear only preset-related data, preserve API key
+      removeFromStorage('dantools-presets');
+      
+      // clear all conversation data
+      presets.forEach(preset => {
+        removeFromStorage(`dantools-conversations-${preset.id}`);
+      });
       
       // reset to default presets
       savePresetsToStorage(defaultPresets);

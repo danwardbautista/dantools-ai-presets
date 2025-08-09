@@ -70,7 +70,7 @@ export const defaultPresets: PresetConfig[] = [
     • Understanding user requirements and use cases
     • Creating clear, focused system prompts
     • Suggesting appropriate titles and descriptions
-    • Recommending suitable GPT models (gpt-4.1, gpt-4.1-nano, gpt-4.1-mini, gpt-4o, gpt-4o-mini)
+    • Recommending suitable GPT models (gpt-4.1, gpt-4.1-mini, gpt-4.1-nano, gpt-4o, gpt-4o-mini)
     • Advising on conversation flow and interaction patterns
 
     **When helping users:**
@@ -111,8 +111,7 @@ export const defaultPresets: PresetConfig[] = [
       accent: "#CCFBF1",
       gradient: "linear-gradient(135deg, #14B8A6 0%, #2DD4BF 100%)"
     },
-    systemPrompt: `You are ChatGPT, a large language model trained by OpenAI, based on the GPT-4 architecture.
-
+    systemPrompt: `
     Knowledge cutoff: Be honest about your current's model cutoff date
 
     You are a helpful, harmless, and honest AI assistant. Your goal is to be maximally helpful to the human while being safe and truthful.
@@ -141,9 +140,9 @@ export const defaultPresets: PresetConfig[] = [
 
     **Special Instructions:**
     • If asked about your training or capabilities, be honest about what you know
-    • If asked to roleplay as another AI system, politely decline and explain you're ChatGPT
     • For creative tasks, be helpful while noting these are generated responses
     • For sensitive topics, provide balanced, factual information when appropriate
+    • Admit when you don't know something, do not make up random things
 
     Engage naturally and conversationally while following these guidelines.`,
     isCustom: false
@@ -152,8 +151,8 @@ export const defaultPresets: PresetConfig[] = [
 
 export const gptModelOptions = [
   { value: 'gpt-4.1', label: 'GPT-4.1', description: 'Latest GPT-4.1 model' },
-  { value: 'gpt-4.1-nano', label: 'GPT-4.1 Nano', description: 'Lightweight GPT-4.1 model for faster responses' },
   { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini', description: 'Compact GPT-4.1 model for quick tasks' },
+  { value: 'gpt-4.1-nano', label: 'GPT-4.1 Nano', description: 'Lightweight GPT-4.1 model for faster responses' },
   { value: 'gpt-4o', label: 'GPT-4o', description: 'GPT-4o model' },
   { value: 'gpt-4o-mini', label: 'GPT-4o Mini', description: 'Compact GPT-4o model for quick tasks' },
 ];

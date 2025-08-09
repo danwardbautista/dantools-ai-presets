@@ -187,7 +187,7 @@ const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose, onSave, edit
               ))}
             </select>
             <p className="text-sm text-[#FCF8DD]/60 mt-1">
-              Choose the GPT model for this preset. Only GPT-4.1 and GPT-4o variants are available.
+              Choose the GPT model for this preset. GPT-4.1 and GPT-4o variants are available.
             </p>
           </div>
 

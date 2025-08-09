@@ -52,28 +52,9 @@ const CodeBlock: React.FC<{ children: string; language?: string; isInline?: bool
 
   if (isInline) {
     return (
-      <div className="relative inline-block group">
-        <code className="bg-black/20 text-current px-2 py-1 rounded-md text-sm font-mono border border-current/20 break-all max-w-full inline-block pr-8">
-          {children}
-        </code>
-        <button
-          onClick={copyToClipboard}
-          className="absolute -top-2 right-2 opacity-0 group-hover:opacity-100 bg-black/60 hover:bg-black/80 text-white px-1.5 py-0.5 rounded-md text-xs transition-all duration-200 flex items-center gap-1 border border-white/20"
-          title={copied ? "Copied!" : "Copy"}
-        >
-          {copied ? (
-            <>
-              <FaCheck className="text-green-400 text-xs" />
-              <span className="text-xs">Copied!</span>
-            </>
-          ) : (
-            <>
-              <FaCopy className="text-xs" />
-              <span className="text-xs">Copy</span>
-            </>
-          )}
-        </button>
-      </div>
+      <code className="bg-black/20 text-current px-2 py-1 rounded-md text-sm font-mono border border-current/20 break-all">
+        {children}
+      </code>
     );
   }
 
@@ -191,14 +172,14 @@ const markdownComponents = {
   },
   ul({ children, ...props }: React.ComponentProps<'ul'>) {
     return (
-      <ul className="list-disc list-inside my-3 space-y-1" {...props}>
+      <ul className="text-[#FCF8DD]/90" {...props}>
         {children}
       </ul>
     );
   },
   ol({ children, ...props }: React.ComponentProps<'ol'>) {
     return (
-      <ol className="list-decimal list-inside my-3 space-y-1" {...props}>
+      <ol className="text-[#FCF8DD]/90" {...props}>
         {children}
       </ol>
     );
@@ -459,9 +440,10 @@ const CustomChat: React.FC<CustomChatProps> = ({
     ];
 
     try {
+      console.log('Using model:', presetConfig.model || "gpt-4.1");
       const openai = getOpenAIClient();
       const stream = await openai.chat.completions.create({
-        model: "gpt-4.1",
+        model: presetConfig.model || "gpt-4.1",
         messages: conversationPayload,
         temperature: 0.7,
         stream: true,
@@ -597,8 +579,8 @@ const CustomChat: React.FC<CustomChatProps> = ({
               <div
                 className={`${
                   msg.sender === "user"
-                    ? "max-w-3xl w-full md:w-auto bg-[#FCF8DD] text-[#112f5e] shadow-sm border border-[#FCF8DD]/20 rounded-lg px-3 py-3 leading-none [&_p]:my-0"
-                    : "max-w-4xl w-full md:w-auto text-[#FCF8DD] text-base leading-relaxed px-3 md:px-6 overflow-hidden"
+                    ? "max-w-3xl w-auto bg-[#FCF8DD] text-[#112f5e] shadow-sm border border-[#FCF8DD]/20 rounded-lg px-3 py-3 leading-none [&_p]:my-0"
+                    : "max-w-4xl w-full md:w-auto text-[#FCF8DD] text-base leading-relaxed px-3 md:px-6 overflow-hidden markdown-content"
                 }`}
               >
                 <ReactMarkdown
@@ -615,7 +597,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
 
           {isTyping && (
             <div className="flex justify-start mb-4">
-              <div className="max-w-4xl w-full md:w-auto text-[#FCF8DD] text-base leading-relaxed px-3 md:px-6 overflow-hidden">
+              <div className="max-w-4xl w-full md:w-auto text-[#FCF8DD] text-base leading-relaxed px-3 md:px-6 overflow-hidden markdown-content">
                 {streamingMessage ? (
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkMath]}

@@ -32,7 +32,7 @@ export const makeConversationTitle = async (messages: ChatMessage[], scannerTitl
         { role: "user", content: prompt }
       ],
       max_tokens: 20,
-      temperature: 0.3,
+      temperature: 0.7,
     });
 
     const title = response.choices[0]?.message?.content?.trim();
