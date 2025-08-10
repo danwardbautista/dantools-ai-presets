@@ -5,11 +5,20 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { FaSearch, FaComments, FaCopy, FaCheck } from "react-icons/fa";
+import { FaSearch, FaComments, FaCopy, FaCheck, FaExclamationTriangle } from "react-icons/fa";
 import 'katex/dist/katex.min.css';
 import { ChatMessage, PresetConfig } from '../types';
 import { getOpenAIClient, sanitizeInput } from '../utils/openai';
 import { adjustTextareaHeight } from '../utils/dom';
+import { 
+  calculateConversationTokens, 
+  getTokenUsage, 
+  shouldOptimizeConversation,
+  optimizeConversation,
+  truncateConversation,
+  TokenUsage 
+} from '../utils/tokenManager';
+import TokenUsageIndicator from './TokenUsageIndicator';
 
 export interface CustomChatProps {
   messages: ChatMessage[];
@@ -288,8 +297,15 @@ const CustomChat: React.FC<CustomChatProps> = ({
   const [streamingMessage, setStreamingMessage] = useState("");
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [customSystemPrompt, setCustomSystemPrompt] = useState<string | null>(null);
+  const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
+  const [showTokenWarning, setShowTokenWarning] = useState(false);
+  const [optimizedMessages, setOptimizedMessages] = useState<ChatMessage[]>([]);
   const chatFeedRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [userScrolledUp, setUserScrolledUp] = useState(false);
+  const [lastScrollTop, setLastScrollTop] = useState(0);
+  const scrollTimeoutRef = useRef<number | null>(null);
+  const streamingScrollRef = useRef<number | null>(null);
 
   useEffect(() => {
     const loadCustomPrompts = () => {
@@ -326,24 +342,142 @@ const CustomChat: React.FC<CustomChatProps> = ({
     content: customSystemPrompt || presetConfig?.systemPrompt || "You are a helpful AI assistant.",
   };
 
+  // update token usage whenever messages or input changes
   useEffect(() => {
-    if (chatFeedRef.current) {
-      const chatFeed = chatFeedRef.current;
-      const isScrolledToBottom = chatFeed.scrollHeight - chatFeed.scrollTop <= chatFeed.clientHeight + 100;
-      
-      // Always scroll during streaming (AI responding) or when at bottom
-      if (isScrolledToBottom || streamingMessage) {
-        // Use requestAnimationFrame for smoother scrolling during streaming
-        requestAnimationFrame(() => {
-          if (chatFeed) {
-            chatFeed.scrollTop = chatFeed.scrollHeight;
-          }
-        });
-      }
-    }
-  }, [messages, isTyping, streamingMessage]);
+    const currentMessages = optimizedMessages.length > 0 ? optimizedMessages : messages;
+    const currentModel = presetConfig?.model || "gpt-4.1";
+    const systemContent = systemPrompt.content;
+    
+    const estimatedTokens = calculateConversationTokens(currentMessages, systemContent, input);
+    const usage = getTokenUsage(estimatedTokens, currentModel);
+    
+    setTokenUsage(usage);
+    
+    // show warning if usage is high
+    setShowTokenWarning(usage.level === 'warning' || usage.level === 'danger');
+  }, [messages, input, customSystemPrompt, presetConfig, optimizedMessages]);
 
-  // force scroll to bottom when opening a chat )
+  // Handle scroll behavior detection
+  useEffect(() => {
+    const chatFeed = chatFeedRef.current;
+    if (!chatFeed) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = chatFeed;
+      const scrollThreshold = 100;
+      const nearBottom = scrollHeight - scrollTop - clientHeight <= scrollThreshold;
+      
+      // Clear any existing timeout
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      
+      // Only update state after user stops scrolling to avoid conflicts
+      scrollTimeoutRef.current = setTimeout(() => {
+        // If user manually scrolled up during streaming, remember this
+        // More sensitive detection: even small upward scrolls count
+        if (streamingMessage && scrollTop < lastScrollTop - 10 && !nearBottom) {
+          setUserScrolledUp(true);
+        }
+        
+        // If user scrolled back near bottom, allow auto-scroll again
+        if (nearBottom && userScrolledUp) {
+          setUserScrolledUp(false);
+        }
+        
+        setLastScrollTop(scrollTop);
+      }, 50); // Even faster response to user input
+    };
+
+    chatFeed.addEventListener('scroll', handleScroll, { passive: true });
+    
+    return () => {
+      chatFeed.removeEventListener('scroll', handleScroll);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, [streamingMessage, userScrolledUp, lastScrollTop]);
+
+  // Smooth auto-scroll logic (non-streaming)
+  useEffect(() => {
+    const chatFeed = chatFeedRef.current;
+    if (!chatFeed) return;
+
+    // For non-streaming messages, scroll to bottom with smooth animation
+    if (!streamingMessage) {
+      const timeout = setTimeout(() => {
+        if (chatFeed) {
+          const targetScrollTop = chatFeed.scrollHeight - chatFeed.clientHeight;
+          const currentScrollTop = chatFeed.scrollTop;
+          const difference = targetScrollTop - currentScrollTop;
+          
+          // Use smooth scrolling for reasonable distances
+          if (Math.abs(difference) < 800) {
+            chatFeed.scrollTo({
+              top: targetScrollTop,
+              behavior: 'smooth'
+            });
+          } else {
+            // For large jumps (new conversations), scroll immediately
+            chatFeed.scrollTop = targetScrollTop;
+          }
+        }
+      }, 100);
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [messages, streamingMessage]);
+
+  // Streaming scroll following with smooth animation
+  useEffect(() => {
+    const chatFeed = chatFeedRef.current;
+    if (!chatFeed || !streamingMessage) {
+      // Clear animation when streaming stops
+      if (streamingScrollRef.current) {
+        clearInterval(streamingScrollRef.current);
+        streamingScrollRef.current = null;
+      }
+      return;
+    }
+
+    // Only start animation if user hasn't scrolled up
+    if (!userScrolledUp && !streamingScrollRef.current) {
+      streamingScrollRef.current = window.setInterval(() => {
+        if (chatFeed && streamingMessage && !userScrolledUp) {
+          const targetScrollTop = chatFeed.scrollHeight - chatFeed.clientHeight;
+          const currentScrollTop = chatFeed.scrollTop;
+          const difference = targetScrollTop - currentScrollTop;
+          
+          // Follow new content with balanced aggression
+          if (difference > 3) {
+            const increment = Math.max(difference * 0.3, 8); // Moderate following
+            chatFeed.scrollTop = Math.min(currentScrollTop + increment, targetScrollTop);
+          } else if (difference > 0) {
+            // Gentle final approach to bottom
+            chatFeed.scrollTop = targetScrollTop;
+          }
+        } else if (!streamingMessage) {
+          // Clear interval when streaming ends
+          if (streamingScrollRef.current) {
+            clearInterval(streamingScrollRef.current);
+            streamingScrollRef.current = null;
+          }
+        }
+      }, 40); // Less frequent updates to give user control time
+    }
+
+    return () => {
+      if (streamingScrollRef.current) {
+        clearInterval(streamingScrollRef.current);
+        streamingScrollRef.current = null;
+      }
+    };
+  }, [streamingMessage, userScrolledUp]);
+
+  // Removed duplicate scroll mechanism to avoid conflicts
+
+  // force scroll to bottom when opening a chat and reset optimization
   useEffect(() => {
     if (chatFeedRef.current) {
       const chatFeed = chatFeedRef.current;
@@ -351,6 +485,10 @@ const CustomChat: React.FC<CustomChatProps> = ({
         chatFeed.scrollTop = chatFeed.scrollHeight;
       }, 50);
     }
+    // Reset optimized messages and scroll state when switching scanners
+    setOptimizedMessages([]);
+    setUserScrolledUp(false);
+    setLastScrollTop(0);
   }, [scannerType]); // trigger only on switch?
 
   useEffect(() => {
@@ -425,14 +563,40 @@ const CustomChat: React.FC<CustomChatProps> = ({
     setIsTyping(true);
     setIsGenerating(true);
     setStreamingMessage("");
+    // Reset scroll state for new conversation
+    setUserScrolledUp(false);
+    setLastScrollTop(0);
 
     const controller = new AbortController();
     setAbortController(controller);
 
+    // determine which messages to use (optimized or original)
+    let messagesToUse = optimizedMessages.length > 0 ? optimizedMessages : messages;
+    
+    // check if we need to optimize the conversation before sending
+    const currentModel = presetConfig?.model || "gpt-4.1";
+    if (shouldOptimizeConversation([...messagesToUse, { sender: "user", message: cleanInput }], systemPrompt.content, currentModel)) {
+      try {
+        const optimized = await optimizeConversation([...messagesToUse, { sender: "user", message: cleanInput }], systemPrompt.content, currentModel);
+        messagesToUse = optimized.slice(0, -1); // Remove the input message we just added
+        setOptimizedMessages(messagesToUse);
+        
+        // Show notification that conversation was optimized
+        setMessages((prev) => [
+          ...prev,
+          { sender: "bot", message: "*Conversation optimized to manage token usage. Some older messages have been summarized.*" },
+        ]);
+      } catch (error) {
+        console.warn('Failed to optimize conversation, using truncation:', error);
+        messagesToUse = truncateConversation([...messagesToUse, { sender: "user", message: cleanInput }], systemPrompt.content, currentModel).slice(0, -1);
+        setOptimizedMessages(messagesToUse);
+      }
+    }
+    
     // build conversation context with system prompt + message history
     const conversationPayload = [
       systemPrompt,
-      ...messages.map((msg) => ({
+      ...messagesToUse.map((msg) => ({
         role: msg.sender === "user" ? "user" as const : "assistant" as const,
         content: msg.message,
       })),
@@ -453,7 +617,6 @@ const CustomChat: React.FC<CustomChatProps> = ({
 
       // stream response chunks and update ui in real time
       let fullResponse = "";
-      let chunkCount = 0;
       for await (const chunk of stream) {
         if (controller.signal.aborted) break;
         
@@ -461,16 +624,6 @@ const CustomChat: React.FC<CustomChatProps> = ({
         if (content) {
           fullResponse += content;
           setStreamingMessage(fullResponse);
-          
-          // Force scroll every few chunks for smoother experience
-          chunkCount++;
-          if (chunkCount % 3 === 0 && chatFeedRef.current) {
-            requestAnimationFrame(() => {
-              if (chatFeedRef.current) {
-                chatFeedRef.current.scrollTop = chatFeedRef.current.scrollHeight;
-              }
-            });
-          }
         }
       }
 
@@ -480,6 +633,12 @@ const CustomChat: React.FC<CustomChatProps> = ({
           { sender: "bot", message: fullResponse },
         ]);
         setStreamingMessage("");
+        
+        // clear optimized messages after successful response
+        // this ensures the full conversation history is preserved
+        if (optimizedMessages.length > 0) {
+          setOptimizedMessages([]);
+        }
       }
     } catch (e: unknown) {
       // api call failed
@@ -494,6 +653,15 @@ const CustomChat: React.FC<CustomChatProps> = ({
           errorMessage = "OpenAI API quota exceeded. Please check your OpenAI account billing.";
         } else if (e.message.includes('rate limit')) {
           errorMessage = "Rate limit exceeded. Please wait a moment and try again.";
+        } else if (e.message.includes('context_length_exceeded') || e.message.includes('maximum context length') || e.message.includes('token limit') || e.message.includes('413')) {
+          errorMessage = "Message too long for this model. The conversation has been optimized to fit within token limits.";
+          // Trigger conversation optimization
+          try {
+            const optimized = truncateConversation(messages, systemPrompt.content, presetConfig?.model || "gpt-4.1");
+            setOptimizedMessages(optimized);
+          } catch (optError) {
+            console.warn('Failed to optimize conversation:', optError);
+          }
         }
         
         setMessages((prev) => [
@@ -530,13 +698,24 @@ const CustomChat: React.FC<CustomChatProps> = ({
       <div className="flex flex-col h-full">
         {/* Enhanced scanner title */}
         <div className="bg-[#112f5e] border-b border-[#FCF8DD]/10 px-6 py-4 md:pl-6 pl-16">
-          <div className="flex flex-col">
-            <span className="text-lg font-medium text-[#FCF8DD]">
-              {conversationTitle || presetConfig.title}
-            </span>
-            <span className="text-sm text-[#FCF8DD]/50 mt-1">
-              {presetConfig.model || 'gpt-4.1'} • {presetConfig.title}
-            </span>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div className="flex flex-col">
+              <span className="text-lg font-medium text-[#FCF8DD]">
+                {conversationTitle || presetConfig.title}
+              </span>
+              <span className="text-sm text-[#FCF8DD]/50 mt-1">
+                {presetConfig.model || 'gpt-4.1'} • {presetConfig.title}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              {tokenUsage && (
+                <TokenUsageIndicator 
+                  usage={tokenUsage} 
+                  compact={true}
+                  className="flex-shrink-0"
+                />
+              )}
+            </div>
           </div>
         </div>
 
@@ -579,21 +758,58 @@ const CustomChat: React.FC<CustomChatProps> = ({
               <div
                 className={`${
                   msg.sender === "user"
-                    ? "max-w-3xl w-auto bg-[#FCF8DD] text-[#112f5e] shadow-sm border border-[#FCF8DD]/20 rounded-lg px-3 py-3 leading-none [&_p]:my-0"
+                    ? "max-w-3xl w-auto bg-[#FCF8DD] text-[#112f5e] shadow-sm border border-[#FCF8DD]/20 rounded-lg px-3 py-3 leading-relaxed whitespace-pre-wrap"
                     : "max-w-4xl w-full md:w-auto text-[#FCF8DD] text-base leading-relaxed px-3 md:px-6 overflow-hidden markdown-content"
                 }`}
               >
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm, remarkMath]}
-                  rehypePlugins={[rehypeKatex]}
-                  skipHtml={true}
-                  components={markdownComponents}
-                >
-                  {msg.message}
-                </ReactMarkdown>
+                {msg.sender === "user" ? (
+                  <div className="whitespace-pre-wrap">{msg.message}</div>
+                ) : (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                    skipHtml={true}
+                    components={markdownComponents}
+                  >
+                    {msg.message}
+                  </ReactMarkdown>
+                )}
               </div>
             </div>
           ))}
+
+          {/* Token warning banner */}
+          {showTokenWarning && tokenUsage && !isTyping && (
+            <div className="mb-4 max-w-4xl mx-auto">
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+                <div className="flex items-center gap-2 text-yellow-400">
+                  <FaExclamationTriangle className="text-sm" />
+                  <span className="text-sm font-medium">
+                    {tokenUsage.level === 'danger' 
+                      ? 'Token limit nearly reached! Older messages may be summarized.'
+                      : 'High token usage detected. Consider shorter messages.'}
+                  </span>
+                </div>
+                <div className="mt-2">
+                  <TokenUsageIndicator usage={tokenUsage} showDetails={true} compact={false} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Optimization notice */}
+          {optimizedMessages.length > 0 && (
+            <div className="mb-4 max-w-4xl mx-auto">
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                <div className="flex items-center gap-2 text-blue-400">
+                  <FaComments className="text-sm" />
+                  <span className="text-sm">
+                    Conversation optimized ({messages.length - optimizedMessages.length} older messages summarized)
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {isTyping && (
             <div className="flex justify-start mb-4">
@@ -625,11 +841,24 @@ const CustomChat: React.FC<CustomChatProps> = ({
 
       <div className="bg-[#112f5e] border-t border-[#FCF8DD]/10 p-4">
         <div className="max-w-4xl mx-auto">
+          {/* Token usage indicator in input area */}
+          {tokenUsage && (tokenUsage.level === 'warning' || tokenUsage.level === 'danger') && (
+            <div className="mb-3">
+              <TokenUsageIndicator usage={tokenUsage} compact={true} className="justify-center" />
+            </div>
+          )}
+          
           <div className="flex items-end gap-3">
             <textarea
               ref={textareaRef}
-              className="flex-1 resize-none border border-[#FCF8DD]/20 rounded-2xl px-6 py-5 focus:ring-2 focus:ring-[#FCF8DD] focus:border-[#FCF8DD] outline-none transition-all duration-200 max-h-48 bg-[#0d2549] text-[#FCF8DD] placeholder-[#FCF8DD]/60 text-lg leading-normal min-h-[60px] scrollbar-thin scrollbar-track-[#0d2549] scrollbar-thumb-[#FCF8DD]/30 hover:scrollbar-thumb-[#FCF8DD]/50"
-              placeholder="type your message here..."
+              className={`flex-1 resize-none border rounded-2xl px-6 py-5 focus:ring-2 focus:ring-[#FCF8DD] focus:border-[#FCF8DD] outline-none transition-all duration-200 max-h-48 bg-[#0d2549] text-[#FCF8DD] placeholder-[#FCF8DD]/60 text-lg leading-normal min-h-[60px] scrollbar-thin scrollbar-track-[#0d2549] scrollbar-thumb-[#FCF8DD]/30 hover:scrollbar-thumb-[#FCF8DD]/50 ${
+                tokenUsage?.level === 'danger' 
+                  ? 'border-red-500/50 focus:ring-red-400 focus:border-red-400' 
+                  : tokenUsage?.level === 'warning'
+                  ? 'border-yellow-500/50 focus:ring-yellow-400 focus:border-yellow-400'
+                  : 'border-[#FCF8DD]/20'
+              }`}
+              placeholder={tokenUsage?.level === 'danger' ? 'Token limit nearly reached - keep messages short...' : 'type your message here...'}
               value={input}
               onChange={(e) => {
                 setInput(e.target.value);

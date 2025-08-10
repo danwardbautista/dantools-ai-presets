@@ -36,7 +36,12 @@ export const validateApiKey = async (apiKey: string): Promise<boolean> => {
 };
 
 export const sanitizeInput = (text: string): string => {
+  // Create a temporary div to safely extract text content
   const div = document.createElement("div");
-  div.innerText = text;
-  return div.innerText;
+  // Convert line breaks to temporary markers before sanitization
+  const marker = '\u200B\u200C\u200D'; // Zero-width characters - extremely unlikely to appear in user text
+  const textWithMarkers = text.replace(/\r?\n/g, marker);
+  div.innerText = textWithMarkers;
+  // Restore line breaks after sanitization
+  return div.innerText.replace(new RegExp(marker, 'g'), '\n');
 };
