@@ -2,187 +2,179 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Essential base styles to maintain original appearance */
-body, html {
-  margin: 0;
-  padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-  box-sizing: border-box;
-  height: 100%;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+@layer base {
+  /* CSS Custom Properties for Design System */
+  :root {
+    --color-primary: #FCF8DD;
+    --color-secondary: #112f5e;
+    --color-accent: #0d2549;
+    --color-primary-alpha-20: rgba(252, 248, 221, 0.2);
+    --color-primary-alpha-30: rgba(252, 248, 221, 0.3);
+    --color-primary-alpha-50: rgba(252, 248, 221, 0.5);
+  }
 
-*, *::before, *::after {
-  box-sizing: border-box;
-}
+  /* Essential base styles */
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    box-sizing: border-box;
+    height: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-#root {
-  height: 100vh;
-  width: 100vw;
-}
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
 
-/* Remove default list styling */
-ul, ol {
-  list-style: none !important;
-  margin: 0 !important;
-  padding: 0 !important;
-}
+  #root {
+    height: 100vh;
+    width: 100vw;
+  }
 
-li {
-  list-style: none !important;
-  margin: 0;
-  padding: 0;
-}
+  /* Navigation and UI resets */
+  nav ul, nav ol, nav li,
+  ul, ol, li {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
 
-/* Fix button styling */
-button {
-  border: none;
-  background: none;
-  cursor: pointer;
-}
+  nav ul::before, nav ol::before, nav li::before {
+    content: none;
+  }
 
-/* Ensure proper link styling */
-a {
-  text-decoration: none;
-  color: inherit;
-}
+  button {
+    border: none;
+    background: none;
+    cursor: pointer;
+  }
 
-/* Navigation specific resets */
-nav ul, nav ol, nav li {
-  list-style: none !important;
-  list-style-type: none !important;
-  margin: 0 !important;
-  padding: 0 !important;
-}
-
-nav ul::before, nav ol::before, nav li::before {
-  content: none !important;
-}
-
-/* Sidebar specific styling */
-.sidebar nav ul li {
-  list-style: none !important;
-  list-style-type: none !important;
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
 }
 
 
-/* Custom Scrollbar Styling */
-.scrollbar-thin {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(252, 248, 221, 0.4) transparent;
-}
+@layer components {
+  /* Unified Scrollbar Styling */
+  .scrollbar-thin,
+  .chat-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary-alpha-30) var(--color-accent);
+  }
 
-.scrollbar-thin::-webkit-scrollbar {
-  width: 6px;
-}
+  .scrollbar-thin::-webkit-scrollbar,
+  .chat-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
 
-.scrollbar-thin::-webkit-scrollbar-track {
-  background: transparent;
-}
+  .scrollbar-thin::-webkit-scrollbar-track,
+  .chat-scroll::-webkit-scrollbar-track {
+    background: var(--color-accent);
+  }
 
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(252, 248, 221, 0.4);
-  border-radius: 3px;
-}
+  .scrollbar-thin::-webkit-scrollbar-thumb,
+  .chat-scroll::-webkit-scrollbar-thumb {
+    background: var(--color-primary-alpha-30);
+    border-radius: 3px;
+  }
 
-.scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: rgba(252, 248, 221, 0.6);
-}
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover,
+  .chat-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--color-primary-alpha-50);
+  }
 
-.scrollbar-thin::-webkit-scrollbar-corner {
-  background: transparent;
-}
+  .scrollbar-thin::-webkit-scrollbar-corner {
+    background: var(--color-accent);
+  }
 
-.scrollbar-thin::-webkit-scrollbar-button {
-  display: none;
-}
+  .scrollbar-thin::-webkit-scrollbar-button {
+    display: none;
+  }
 
-/* Code block mobile layout*/
-.code-block-container {
-  width: 100vw;
-  margin-left: calc(-50vw + 50%);
-  position: relative;
-}
-
-@media (min-width: 768px) {
+  /* Code block responsive layout */
   .code-block-container {
-    width: calc(100% + 3rem);
-    margin-left: -1.5rem;
+    width: 100vw;
+    margin-left: calc(-50vw + 50%);
+    position: relative;
   }
-}
 
-.code-scroll-container {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-}
-
-.code-scroll-container::-webkit-scrollbar {
-  height: 6px;
-}
-
-.code-scroll-container::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.code-scroll-container::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-}
-
-.code-scroll-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-@media (max-width: 768px) {
-  .code-scroll-container::-webkit-scrollbar {
-    height: 4px !important;
+  @media (min-width: 768px) {
+    .code-block-container {
+      width: calc(100% + 3rem);
+      margin-left: -1.5rem;
+    }
   }
-  
+
+  /* Code block horizontal scrolling */
   .code-scroll-container {
-    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    -webkit-overflow-scrolling: touch;
   }
-  
-  /* Improved mobile command block styling */
-  code {
-    word-break: break-all !important;
-    max-width: 100% !important;
-    overflow-wrap: break-word !important;
-    white-space: pre-wrap !important;
+
+  .code-scroll-container::-webkit-scrollbar {
+    height: 6px;
   }
-}
 
-/* Override list styling for markdown content */
-.markdown-content ul {
-  list-style: disc !important;
-  list-style-position: outside !important;
-  margin-left: 1.5rem !important;
-  padding-left: 0.5rem !important;
-  margin-top: 0.75rem !important;
-  margin-bottom: 0.75rem !important;
-}
+  .code-scroll-container::-webkit-scrollbar-track {
+    background: transparent;
+  }
 
-.markdown-content ol {
-  list-style: decimal !important;
-  list-style-position: outside !important;
-  margin-left: 1.5rem !important;
-  padding-left: 0.5rem !important;
-  margin-top: 0.75rem !important;
-  margin-bottom: 0.75rem !important;
-}
+  .code-scroll-container::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+  }
 
-.markdown-content li {
-  list-style: inherit !important;
-  margin: 0.25rem 0 !important;
-  padding-left: 0.5rem !important;
-}
+  .code-scroll-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
 
-/* Nested lists */
-.markdown-content ul ul,
-.markdown-content ol ol,
-.markdown-content ul ol,
-.markdown-content ol ul {
-  margin-top: 0.25rem !important;
-  margin-bottom: 0.25rem !important;
+  @media (max-width: 768px) {
+    .code-scroll-container::-webkit-scrollbar {
+      height: 4px;
+    }
+    
+    /* Mobile code styling */
+    code {
+      word-break: break-all;
+      max-width: 100%;
+      overflow-wrap: break-word;
+      white-space: pre-wrap;
+    }
+  }
+
+  /* Markdown content list styling - higher specificity to override resets */
+  .markdown-content ul {
+    list-style: disc;
+    list-style-position: outside;
+    margin: 0.75rem 0 0.75rem 1.5rem;
+    padding-left: 0.5rem;
+  }
+
+  .markdown-content ol {
+    list-style: decimal;
+    list-style-position: outside;
+    margin: 0.75rem 0 0.75rem 1.5rem;
+    padding-left: 0.5rem;
+  }
+
+  .markdown-content li {
+    list-style: inherit;
+    margin: 0.25rem 0;
+    padding-left: 0.5rem;
+  }
+
+  /* Nested lists */
+  .markdown-content ul ul,
+  .markdown-content ol ol,
+  .markdown-content ul ol,
+  .markdown-content ol ul {
+    margin-top: 0.25rem;
+    margin-bottom: 0.25rem;
+  }
 }
 

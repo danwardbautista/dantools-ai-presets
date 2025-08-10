@@ -27,18 +27,6 @@ export const removeFromStorage = (key: string): void => {
   }
 };
 
-export const clearStorageByPattern = (pattern: string): void => {
-  try {
-    const allKeys = Object.keys(localStorage);
-    allKeys.forEach(key => {
-      if (key.includes(pattern)) {
-        localStorage.removeItem(key);
-      }
-    });
-  } catch (error) {
-    console.warn(`Failed to clear localStorage by pattern: ${pattern}`, error);
-  }
-};
 
 export const saveToStorageWithEvent = <T>(key: string, value: T, eventName: string): void => {
   saveToStorage(key, value);

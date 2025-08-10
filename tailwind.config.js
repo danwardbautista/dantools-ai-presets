@@ -5,7 +5,13 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        'app-primary': 'var(--color-primary)',
+        'app-secondary': 'var(--color-secondary)',
+        'app-accent': 'var(--color-accent)',
+      }
+    },
   },
   corePlugins: {
     preflight: false,
