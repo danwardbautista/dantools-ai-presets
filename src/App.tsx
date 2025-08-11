@@ -218,6 +218,8 @@ const AppContent: React.FC = () => {
 
   // loads a saved conversation into the current chat
   const loadConversation = (scannerType: ScannerType, conversation: SavedConversation) => {
+    if (isGenerating) return; // dont allow switching while generating
+    
     setIsLoadingConversation(prev => ({ ...prev, [scannerType]: true }));
     setCurrentMessages(prev => ({ ...prev, [scannerType]: conversation.messages }));
     setCurrentScannerType(scannerType);
@@ -236,6 +238,8 @@ const AppContent: React.FC = () => {
 
   // starts fresh conversation for selected preset
   const startNewConversation = async (scannerType: ScannerType) => {
+    if (isGenerating) return; // dont allow switching while generating
+    
     if (currentScannerType && currentMessages[currentScannerType].length > 0) {
       await saveCurrentConversation(currentScannerType);
     }
@@ -256,6 +260,8 @@ const AppContent: React.FC = () => {
   };
 
   const showPresetSelectionScreen = () => {
+    if (isGenerating) return; // dont allow switching while generating
+    
     setCurrentScannerType(null);
     navigate('/');
     closeMobileMenu();
@@ -400,7 +406,9 @@ const AppContent: React.FC = () => {
                     w-full flex items-center px-4 py-3 rounded-xl transition-all duration-300 relative overflow-hidden
                     ${!currentScannerType && location.pathname === '/' 
                       ? 'bg-[#FCF8DD] text-[#112f5e] font-semibold shadow-lg' 
-                      : 'text-[#FCF8DD]/80 hover:bg-[#FCF8DD] hover:text-[#112f5e] hover:translate-x-1'
+                      : isGenerating
+                        ? 'text-[#FCF8DD]/40 cursor-not-allowed opacity-50'
+                        : 'text-[#FCF8DD]/80 hover:bg-[#FCF8DD] hover:text-[#112f5e] hover:translate-x-1'
                     }
                     ${isCollapsed ? 'md:justify-center md:px-3' : ''}
                   `}
@@ -432,8 +440,13 @@ const AppContent: React.FC = () => {
                 <div className="flex items-center justify-between px-4 pb-3 border-b border-[#FCF8DD]/20 mb-4">
                   <h3 className="text-sm font-semibold text-[#FCF8DD]/80 uppercase tracking-wider">Recent Chats</h3>
                   <button 
-                    className="text-xs text-[#FCF8DD]/60 hover:text-red-400 hover:bg-red-500/10 px-2 py-1 rounded-md transition-colors duration-200"
+                    className={`text-xs px-2 py-1 rounded-md transition-colors duration-200 ${
+                      isGenerating
+                        ? 'text-[#FCF8DD]/30 cursor-not-allowed opacity-50'
+                        : 'text-[#FCF8DD]/60 hover:text-red-400 hover:bg-red-500/10'
+                    }`}
                     onClick={() => {
+                      if (isGenerating) return;
                       // delete all conversations
                       presets.forEach(preset => clearHistory(preset.id));
                       // clear current chat and go back to preset selection
@@ -441,6 +454,7 @@ const AppContent: React.FC = () => {
                       setCurrentScannerType(null);
                       navigate('/');
                     }}
+                    disabled={isGenerating}
                   >
                     Clear All
                   </button>
@@ -456,10 +470,13 @@ const AppContent: React.FC = () => {
                             w-full text-left p-3 rounded-lg transition-all duration-200
                             ${isActive 
                               ? 'bg-[#FCF8DD] text-[#112f5e] font-semibold' 
-                              : 'text-[#FCF8DD]/70 hover:bg-[#FCF8DD]/10 hover:text-[#FCF8DD]/90'
+                              : isGenerating
+                                ? 'text-[#FCF8DD]/40 cursor-not-allowed opacity-50'
+                                : 'text-[#FCF8DD]/70 hover:bg-[#FCF8DD]/10 hover:text-[#FCF8DD]/90'
                             }
                           `}
                           onClick={() => loadConversation(conversation.scannerType, conversation)}
+                          disabled={isGenerating}
                         >
                           <div className="w-full">
                             <div className="flex items-center gap-2 mb-1">
@@ -539,7 +556,7 @@ const AppContent: React.FC = () => {
                     conversationTitle={getCurrentConversationTitle(currentScannerType, currentMessages[currentScannerType] || [])}
                   />
                 ) : (
-                  <PresetSelectionScreen presets={presets} onSelectPreset={selectPreset} />
+                  <PresetSelectionScreen presets={presets} onSelectPreset={selectPreset} isGenerating={isGenerating} />
                 )}
               </div>
             } />
@@ -610,9 +627,10 @@ const NavItem: React.FC<NavItemProps> = ({ to, label, icon, isCollapsed, disable
 interface PresetSelectionScreenProps {
   presets: PresetConfig[];
   onSelectPreset: (presetId: string) => void;
+  isGenerating: boolean;
 }
 
-const PresetSelectionScreen: React.FC<PresetSelectionScreenProps> = ({ presets, onSelectPreset }) => {
+const PresetSelectionScreen: React.FC<PresetSelectionScreenProps> = ({ presets, onSelectPreset, isGenerating }) => {
   const [selectedPreset, setSelectedPreset] = useState<string>('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
@@ -634,8 +652,12 @@ const PresetSelectionScreen: React.FC<PresetSelectionScreenProps> = ({ presets, 
               {favoritePresets.map((preset) => (
                 <div
                   key={preset.id}
-                  onClick={() => onSelectPreset(preset.id)}
-                  className="group bg-[#112f5e] rounded-xl border border-[#FCF8DD]/20 hover:border-[#FCF8DD]/40 transition-all duration-300 overflow-hidden hover:scale-105 hover:shadow-xl cursor-pointer"
+                  onClick={() => !isGenerating && onSelectPreset(preset.id)}
+                  className={`group bg-[#112f5e] rounded-xl border border-[#FCF8DD]/20 transition-all duration-300 overflow-hidden ${
+                    isGenerating
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:border-[#FCF8DD]/40 hover:scale-105 hover:shadow-xl cursor-pointer'
+                  }`}
                 >
                   {/* Color Header */}
                   <div 
@@ -670,8 +692,13 @@ const PresetSelectionScreen: React.FC<PresetSelectionScreenProps> = ({ presets, 
           </label>
           <div className="relative max-w-lg mx-auto">
             <button
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="w-full bg-[#112f5e] border-2 border-[#FCF8DD]/30 rounded-2xl px-6 py-4 text-[#FCF8DD] focus:ring-4 focus:ring-[#FCF8DD]/20 focus:border-[#FCF8DD] outline-none text-lg cursor-pointer transition-all duration-300 hover:border-[#FCF8DD]/50 hover:bg-[#112f5e]/90 shadow-lg hover:shadow-xl text-left flex items-center justify-between"
+              onClick={() => !isGenerating && setIsDropdownOpen(!isDropdownOpen)}
+              className={`w-full bg-[#112f5e] border-2 border-[#FCF8DD]/30 rounded-2xl px-6 py-4 text-[#FCF8DD] focus:ring-4 focus:ring-[#FCF8DD]/20 focus:border-[#FCF8DD] outline-none text-lg transition-all duration-300 shadow-lg text-left flex items-center justify-between ${
+                isGenerating
+                  ? 'opacity-50 cursor-not-allowed'
+                  : 'cursor-pointer hover:border-[#FCF8DD]/50 hover:bg-[#112f5e]/90 hover:shadow-xl'
+              }`}
+              disabled={isGenerating}
             >
               <span className={selectedPreset ? 'text-[#FCF8DD]' : 'text-[#FCF8DD]/60'}>
                 {selectedPreset ? presets.find(p => p.id === selectedPreset)?.title : 'Choose a preset...'}
@@ -688,6 +715,7 @@ const PresetSelectionScreen: React.FC<PresetSelectionScreenProps> = ({ presets, 
                     <button
                       key={preset.id}
                       onClick={() => {
+                        if (isGenerating) return;
                         setSelectedPreset(preset.id);
                         setIsDropdownOpen(false);
                       }}
@@ -753,11 +781,11 @@ const PresetSelectionScreen: React.FC<PresetSelectionScreenProps> = ({ presets, 
         )}
 
         <button
-          onClick={() => selectedPreset && onSelectPreset(selectedPreset)}
-          disabled={!selectedPreset}
+          onClick={() => selectedPreset && !isGenerating && onSelectPreset(selectedPreset)}
+          disabled={!selectedPreset || isGenerating}
           className={`
             px-10 py-4 rounded-2xl text-lg font-semibold transition-all duration-300 shadow-lg
-            ${selectedPreset 
+            ${selectedPreset && !isGenerating
               ? 'bg-gradient-to-r from-[#FCF8DD] to-[#FCF8DD]/90 text-[#112f5e] hover:from-[#FCF8DD]/95 hover:to-[#FCF8DD]/85 hover:scale-105 hover:shadow-2xl transform' 
               : 'bg-[#FCF8DD]/20 text-[#FCF8DD]/40 cursor-not-allowed shadow-none'
             }
@@ -765,6 +793,16 @@ const PresetSelectionScreen: React.FC<PresetSelectionScreenProps> = ({ presets, 
         >
           Start Chat
         </button>
+
+        {isGenerating && (
+          <div className="mt-8 text-center">
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 max-w-md mx-auto">
+              <div className="text-yellow-400 text-sm">
+                ⏳ AI is generating a response. Navigation is temporarily disabled.
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="mt-12 text-sm text-[#FCF8DD]/60">
           Need more presets? Visit <span className="text-[#FCF8DD]/80 font-medium">Presets</span> to create custom chat configurations
