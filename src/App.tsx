@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { FaCog, FaBars, FaChevronRight, FaPlus, FaStar } from 'react-icons/fa';
 import CustomChat from './components/CustomChat';
@@ -54,17 +54,17 @@ const AppContent: React.FC = () => {
     };
   }, []);
 
-  const toggleSidebar = () => {
+  const toggleSidebar = useCallback(() => {
     setIsCollapsed(!isCollapsed);
-  };
+  }, [isCollapsed]);
 
-  const toggleMobileMenu = () => {
+  const toggleMobileMenu = useCallback(() => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
-  };
+  }, [isMobileMenuOpen]);
 
-  const closeMobileMenu = () => {
+  const closeMobileMenu = useCallback(() => {
     setIsMobileMenuOpen(false);
-  };
+  }, []);
 
   useEffect(() => {
     closeMobileMenu();
@@ -151,44 +151,49 @@ const AppContent: React.FC = () => {
     currentMessagesRef.current = currentMessages;
   }, [currentMessages]);
 
-  // auto save conversations with delay
-  useEffect(() => {
-    const timeouts: ReturnType<typeof setTimeout>[] = [];
-
-    presets.forEach(preset => {
-      const scannerType = preset.id;
-      const messages = currentMessages[scannerType];
-      const loading = isLoadingConversation[scannerType];
-      
-      // skip saving while loading
-      if (loading) return;
-      
-      const timeoutId = setTimeout(async () => {
-        if (messages.length > 0) {
-          const lastMessage = messages[messages.length - 1];
-          // only save if new content exists
-          const hasNewContent = messages.length > lastSavedMessageCountRef.current[scannerType];
+  // auto save but dont run too often
+  const debouncedAutoSave = useMemo(() => {
+    let timeoutId: number;
+    return () => {
+      clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(async () => {
+        const promises: Promise<void>[] = [];
+        
+        presets.forEach(preset => {
+          const scannerType = preset.id;
+          const messages = currentMessages[scannerType];
+          const loading = isLoadingConversation[scannerType];
           
-          // save when bot replies or user has multiple messages
+          // dont save while loading
+          if (loading || !messages?.length) return;
+          
+          const lastMessage = messages[messages.length - 1];
+          // only save if theres new stuff
+          const hasNewContent = messages.length > (lastSavedMessageCountRef.current[scannerType] || 0);
+          
+          // save when bot replies or multiple user messages
           if (lastMessage.sender === "bot" || 
               (messages.filter(msg => msg.sender === "user").length > 1)) {
-            await saveConversation(scannerType, messages, hasNewContent);
+            promises.push(saveConversation(scannerType, messages, hasNewContent));
           }
-        }
-      }, 1000);
+        });
+        
+        await Promise.all(promises);
+      }, 2000); // wait 2s to reduce saves
+    };
+  }, [presets, currentMessages, isLoadingConversation, saveConversation]);
 
-      timeouts.push(timeoutId);
-    });
-
-    return () => timeouts.forEach(timeout => clearTimeout(timeout));
-  }, [currentMessages, isLoadingConversation, saveConversation, presets]);
+  // auto save with debouncing
+  useEffect(() => {
+    debouncedAutoSave();
+  }, [currentMessages, debouncedAutoSave]);
 
   // save conversations when user leaves
   useEffect(() => {
     const onBeforeUnload = () => {
       Object.entries(currentMessagesRef.current).forEach(([scannerType, messages]) => {
         if (messages.length > 0) {
-          // beforeunload cant use async but try to save anyway
+          // try to save before leaving page
           saveConversation(scannerType as ScannerType, messages).catch(console.error);
         }
       });
@@ -198,7 +203,7 @@ const AppContent: React.FC = () => {
     
     return () => {
       window.removeEventListener('beforeunload', onBeforeUnload);
-      // save when component unmounts
+      // save when component dies
       Object.entries(currentMessagesRef.current).forEach(([scannerType, messages]) => {
         if (messages.length > 0) {
           saveConversation(scannerType as ScannerType, messages).catch(console.error);
@@ -216,11 +221,11 @@ const AppContent: React.FC = () => {
     setIsLoadingConversation(prev => ({ ...prev, [scannerType]: true }));
     setCurrentMessages(prev => ({ ...prev, [scannerType]: conversation.messages }));
     setCurrentScannerType(scannerType);
-    navigate('/'); // Navigate to home route to show the conversation
+    navigate('/'); // go to chat view
     closeMobileMenu();
-    // track saved message count
+    // remember how many messages we saved
     lastSavedMessageCountRef.current[scannerType] = conversation.messages.length;
-    // clear loading after delay
+    // stop loading animation
     setTimeout(() => setIsLoadingConversation(prev => ({ ...prev, [scannerType]: false })), 100);
   };
 
@@ -240,9 +245,9 @@ const AppContent: React.FC = () => {
     setCurrentScannerType(scannerType);
     navigate('/');
     closeMobileMenu();
-    // reset message count for new convo
+    // reset message count
     lastSavedMessageCountRef.current[scannerType] = 0;
-    // clear loading
+    // stop loading
     setTimeout(() => setIsLoadingConversation(prev => ({ ...prev, [scannerType]: false })), 100);
   };
 
@@ -429,9 +434,9 @@ const AppContent: React.FC = () => {
                   <button 
                     className="text-xs text-[#FCF8DD]/60 hover:text-red-400 hover:bg-red-500/10 px-2 py-1 rounded-md transition-colors duration-200"
                     onClick={() => {
-                      // clear all saved conversations
+                      // delete all conversations
                       presets.forEach(preset => clearHistory(preset.id));
-                      // clear current active messages and reset to preset selection
+                      // clear current chat and go back to preset selection
                       setCurrentMessages({});
                       setCurrentScannerType(null);
                       navigate('/');

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -6,6 +6,7 @@ import rehypeKatex from "rehype-katex";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { FaSearch, FaComments, FaCopy, FaCheck, FaExclamationTriangle } from "react-icons/fa";
+import VirtualMessageList from './VirtualMessageList';
 import 'katex/dist/katex.min.css';
 import { ChatMessage, PresetConfig } from '../types';
 import { getOpenAIClient, sanitizeInput } from '../utils/openai';
@@ -29,7 +30,7 @@ export interface CustomChatProps {
   conversationTitle?: string;
 }
 
-const CodeBlock: React.FC<{ children: string; language?: string; isInline?: boolean }> = ({ 
+const CodeBlock: React.FC<{ children: string; language?: string; isInline?: boolean }> = memo(({ 
   children, 
   language, 
   isInline = false 
@@ -111,7 +112,9 @@ const CodeBlock: React.FC<{ children: string; language?: string; isInline?: bool
       </div>
     </div>
   );
-};
+});
+
+CodeBlock.displayName = 'CodeBlock';
 
 const markdownComponents = {
   code({ className, children }: React.ComponentProps<'code'>) {
@@ -283,7 +286,155 @@ const markdownComponents = {
   }
 };
 
-// main chat interface component - handles message display and user input
+// message bubble that doesnt re-render unless content changes
+const MessageBubble: React.FC<{
+  message: ChatMessage;
+  index: number;
+}> = memo(({ message }) => {
+  return (
+    <div
+      className={`flex ${
+        message.sender === "user" ? "justify-end" : "justify-start"
+      } mb-4`}
+    >
+      <div
+        className={`${
+          message.sender === "user"
+            ? "max-w-3xl w-auto bg-[#FCF8DD] text-[#112f5e] shadow-sm border border-[#FCF8DD]/20 rounded-lg px-3 py-3 leading-relaxed whitespace-pre-wrap"
+            : "max-w-4xl w-full md:w-auto text-[#FCF8DD] text-base leading-relaxed px-3 md:px-6 overflow-hidden markdown-content"
+        }`}
+      >
+        {message.sender === "user" ? (
+          <div className="whitespace-pre-wrap">{message.message}</div>
+        ) : (
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm, remarkMath]}
+            rehypePlugins={[rehypeKatex]}
+            skipHtml={true}
+            components={markdownComponents}
+          >
+            {message.message}
+          </ReactMarkdown>
+        )}
+      </div>
+    </div>
+  );
+});
+
+MessageBubble.displayName = 'MessageBubble';
+
+// chat area wrapper to avoid re-rendering everything
+const ChatMessagesContainer: React.FC<{
+  messages: ChatMessage[];
+  presetConfig: PresetConfig;
+  showTokenWarning: boolean;
+  tokenUsage: any;
+  isTyping: boolean;
+  optimizedMessages: ChatMessage[];
+  streamingMessage: string;
+}> = memo(({ messages, presetConfig, showTokenWarning, tokenUsage, isTyping, optimizedMessages, streamingMessage }) => {
+  return (
+    <>
+      {messages.length === 0 && (
+        <div className="text-center py-16">
+          <div className="mb-6">
+            <div 
+              className="w-12 h-12 mx-auto rounded-xl flex items-center justify-center mb-4"
+              style={{
+                backgroundColor: presetConfig.subtitle ? presetConfig.theme.primary : '#FCF8DD'
+              }}
+            >
+              {presetConfig.subtitle ? (
+                <FaComments className="text-white text-lg" />
+              ) : (
+                <FaSearch className="text-[#112f5e] text-lg" />
+              )}
+            </div>
+          </div>
+          <h3 className="text-2xl font-semibold text-[#FCF8DD] mb-3">
+            {presetConfig.title}
+          </h3>
+          <p className="text-[#FCF8DD]/80 text-base leading-relaxed max-w-xl mx-auto">
+            {presetConfig.subtitle || "Start a conversation using the preset configuration selected."}
+          </p>
+        </div>
+      )}
+      
+      <VirtualMessageList
+        messages={messages}
+        renderMessage={(message, index) => (
+          <MessageBubble
+            key={`${index}-${message.sender}-${message.message.slice(0, 50)}`}
+            message={message}
+            index={index}
+          />
+        )}
+        containerHeight={600}
+        estimatedItemHeight={100}
+      />
+
+      {/* token warning */}
+      {showTokenWarning && tokenUsage && !isTyping && (
+        <div className="mb-4 max-w-4xl mx-auto">
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+            <div className="flex items-center gap-2 text-yellow-400">
+              <FaExclamationTriangle className="text-sm" />
+              <span className="text-sm font-medium">
+                {tokenUsage.level === 'danger' 
+                  ? 'Token limit nearly reached! Older messages may be summarized.'
+                  : 'High token usage detected. Consider shorter messages.'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* conversation was optimized notice */}
+      {optimizedMessages.length > 0 && (
+        <div className="mb-4 max-w-4xl mx-auto">
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+            <div className="flex items-center gap-2 text-blue-400">
+              <FaComments className="text-sm" />
+              <span className="text-sm">
+                Conversation optimized ({messages.length - optimizedMessages.length} older messages summarized)
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isTyping && (
+        <div className="flex justify-start mb-4">
+          <div className="max-w-4xl w-full md:w-auto text-[#FCF8DD] text-base leading-relaxed px-3 md:px-6 overflow-hidden markdown-content">
+            {streamingMessage ? (
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+                skipHtml={true}
+                components={markdownComponents}
+              >
+                {streamingMessage}
+              </ReactMarkdown>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <div className="flex space-x-1">
+                  <div className="w-2 h-2 bg-[#FCF8DD]/80 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-[#FCF8DD]/60 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                  <div className="w-2 h-2 bg-[#FCF8DD]/40 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                </div>
+                <span className="text-[#FCF8DD]/80 text-sm">Thinking...</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+});
+
+ChatMessagesContainer.displayName = 'ChatMessagesContainer';
+
+// main chat component
 const CustomChat: React.FC<CustomChatProps> = ({ 
   messages, 
   setMessages, 
@@ -342,52 +493,63 @@ const CustomChat: React.FC<CustomChatProps> = ({
     content: customSystemPrompt || presetConfig?.systemPrompt || "You are a helpful AI assistant.",
   };
 
-  // update token usage whenever messages or input changes
+  // wait a bit before calculating tokens so typing doesnt lag
+  const debouncedTokenCalculation = useMemo(() => {
+    let timeoutId: number;
+    return (messages: ChatMessage[], input: string, systemContent: string, model: string) => {
+      clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => {
+        const currentMessages = optimizedMessages.length > 0 ? optimizedMessages : messages;
+        const estimatedTokens = calculateConversationTokens(currentMessages, systemContent, input);
+        const usage = getTokenUsage(estimatedTokens, model);
+        
+        setTokenUsage(usage);
+        setShowTokenWarning(usage.level === 'warning' || usage.level === 'danger');
+      }, 150); // wait 150ms
+    };
+  }, [optimizedMessages]);
+
+  // calculate tokens but debounced
   useEffect(() => {
-    const currentMessages = optimizedMessages.length > 0 ? optimizedMessages : messages;
     const currentModel = presetConfig?.model || "gpt-4.1";
     const systemContent = systemPrompt.content;
     
-    const estimatedTokens = calculateConversationTokens(currentMessages, systemContent, input);
-    const usage = getTokenUsage(estimatedTokens, currentModel);
-    
-    setTokenUsage(usage);
-    
-    // show warning if usage is high
-    setShowTokenWarning(usage.level === 'warning' || usage.level === 'danger');
-  }, [messages, input, customSystemPrompt, presetConfig, optimizedMessages]);
+    debouncedTokenCalculation(messages, input, systemContent, currentModel);
+  }, [messages, input, customSystemPrompt, presetConfig, debouncedTokenCalculation, systemPrompt.content]);
 
-  // Handle scroll behavior detection
-  useEffect(() => {
+  // scroll handler that doesnt run too often
+  const handleScroll = useCallback(() => {
     const chatFeed = chatFeedRef.current;
     if (!chatFeed) return;
 
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = chatFeed;
-      const scrollThreshold = 100;
-      const nearBottom = scrollHeight - scrollTop - clientHeight <= scrollThreshold;
-      
-      // Clear any existing timeout
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
+    const { scrollTop, scrollHeight, clientHeight } = chatFeed;
+    const scrollThreshold = 100;
+    const nearBottom = scrollHeight - scrollTop - clientHeight <= scrollThreshold;
+    
+    // clear old timeout
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    
+    // wait until user stops scrolling
+    scrollTimeoutRef.current = window.setTimeout(() => {
+      // user scrolled up during streaming
+      if (streamingMessage && scrollTop < lastScrollTop - 10 && !nearBottom) {
+        setUserScrolledUp(true);
       }
       
-      // Only update state after user stops scrolling to avoid conflicts
-      scrollTimeoutRef.current = setTimeout(() => {
-        // If user manually scrolled up during streaming, remember this
-        // More sensitive detection: even small upward scrolls count
-        if (streamingMessage && scrollTop < lastScrollTop - 10 && !nearBottom) {
-          setUserScrolledUp(true);
-        }
-        
-        // If user scrolled back near bottom, allow auto-scroll again
-        if (nearBottom && userScrolledUp) {
-          setUserScrolledUp(false);
-        }
-        
-        setLastScrollTop(scrollTop);
-      }, 50); // Even faster response to user input
-    };
+      // user scrolled back to bottom
+      if (nearBottom && userScrolledUp) {
+        setUserScrolledUp(false);
+      }
+      
+      setLastScrollTop(scrollTop);
+    }, 100); // wait 100ms for better performance
+  }, [streamingMessage, userScrolledUp, lastScrollTop]);
+
+  useEffect(() => {
+    const chatFeed = chatFeedRef.current;
+    if (!chatFeed) return;
 
     chatFeed.addEventListener('scroll', handleScroll, { passive: true });
     
@@ -397,14 +559,14 @@ const CustomChat: React.FC<CustomChatProps> = ({
         clearTimeout(scrollTimeoutRef.current);
       }
     };
-  }, [streamingMessage, userScrolledUp, lastScrollTop]);
+  }, [handleScroll]);
 
-  // Smooth auto-scroll logic (non-streaming)
+  // auto scroll when not streaming
   useEffect(() => {
     const chatFeed = chatFeedRef.current;
     if (!chatFeed) return;
 
-    // For non-streaming messages, scroll to bottom with smooth animation
+    // scroll to bottom smoothly
     if (!streamingMessage) {
       const timeout = setTimeout(() => {
         if (chatFeed) {
@@ -412,14 +574,14 @@ const CustomChat: React.FC<CustomChatProps> = ({
           const currentScrollTop = chatFeed.scrollTop;
           const difference = targetScrollTop - currentScrollTop;
           
-          // Use smooth scrolling for reasonable distances
+          // smooth scroll if not too far
           if (Math.abs(difference) < 800) {
             chatFeed.scrollTo({
               top: targetScrollTop,
               behavior: 'smooth'
             });
           } else {
-            // For large jumps (new conversations), scroll immediately
+            // jump immediately for big distances
             chatFeed.scrollTop = targetScrollTop;
           }
         }
@@ -429,11 +591,11 @@ const CustomChat: React.FC<CustomChatProps> = ({
     }
   }, [messages, streamingMessage]);
 
-  // Streaming scroll following with smooth animation
+  // scroll following during streaming
   useEffect(() => {
     const chatFeed = chatFeedRef.current;
     if (!chatFeed || !streamingMessage) {
-      // Clear animation when streaming stops
+      // stop animation when streaming ends
       if (streamingScrollRef.current) {
         clearInterval(streamingScrollRef.current);
         streamingScrollRef.current = null;
@@ -441,7 +603,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
       return;
     }
 
-    // Only start animation if user hasn't scrolled up
+    // start animation if user didnt scroll up
     if (!userScrolledUp && !streamingScrollRef.current) {
       streamingScrollRef.current = window.setInterval(() => {
         if (chatFeed && streamingMessage && !userScrolledUp) {
@@ -449,22 +611,21 @@ const CustomChat: React.FC<CustomChatProps> = ({
           const currentScrollTop = chatFeed.scrollTop;
           const difference = targetScrollTop - currentScrollTop;
           
-          // Follow new content with balanced aggression
-          if (difference > 3) {
-            const increment = Math.max(difference * 0.3, 8); // Moderate following
+          // follow smoothly
+          if (difference > 5) {
+            const increment = Math.max(difference * 0.4, 10);
             chatFeed.scrollTop = Math.min(currentScrollTop + increment, targetScrollTop);
           } else if (difference > 0) {
-            // Gentle final approach to bottom
             chatFeed.scrollTop = targetScrollTop;
           }
         } else if (!streamingMessage) {
-          // Clear interval when streaming ends
+          // stop when streaming ends
           if (streamingScrollRef.current) {
             clearInterval(streamingScrollRef.current);
             streamingScrollRef.current = null;
           }
         }
-      }, 40); // Less frequent updates to give user control time
+      }, 60); // run every 60ms
     }
 
     return () => {
@@ -475,9 +636,9 @@ const CustomChat: React.FC<CustomChatProps> = ({
     };
   }, [streamingMessage, userScrolledUp]);
 
-  // Removed duplicate scroll mechanism to avoid conflicts
+  // removed duplicate scroll stuff
 
-  // force scroll to bottom when opening a chat and reset optimization
+  // scroll to bottom when opening chat
   useEffect(() => {
     if (chatFeedRef.current) {
       const chatFeed = chatFeedRef.current;
@@ -485,7 +646,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
         chatFeed.scrollTop = chatFeed.scrollHeight;
       }, 50);
     }
-    // Reset optimized messages and scroll state when switching scanners
+    // reset stuff when switching chats
     setOptimizedMessages([]);
     setUserScrolledUp(false);
     setLastScrollTop(0);
@@ -522,7 +683,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
     adjustTextareaHeight(textareaRef.current);
   }, [input]);
 
-  // show loading or error if config not loaded
+  // show loading if preset not found
   if (!presetConfig) {
     return (
       <div className="h-screen bg-[#0d2549] flex items-center justify-center">
@@ -534,7 +695,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
     );
   }
 
-  // abort current api request and save partial response
+  // stop generation and save what we got
   const stopGeneration = () => {
     if (abortController) {
       abortController.abort();
@@ -551,8 +712,8 @@ const CustomChat: React.FC<CustomChatProps> = ({
     }
   };
 
-  // sends user message to openai and streams response
-  const sendMessage = async (messageText?: string) => {
+  // send message to openai
+  const sendMessage = useCallback(async (messageText?: string) => {
     const textToSend = messageText || input.trim();
     if (!textToSend || isTyping) return;
 
@@ -563,25 +724,25 @@ const CustomChat: React.FC<CustomChatProps> = ({
     setIsTyping(true);
     setIsGenerating(true);
     setStreamingMessage("");
-    // Reset scroll state for new conversation
+    // reset scroll for new message
     setUserScrolledUp(false);
     setLastScrollTop(0);
 
     const controller = new AbortController();
     setAbortController(controller);
 
-    // determine which messages to use (optimized or original)
+    // use optimized messages if we have them
     let messagesToUse = optimizedMessages.length > 0 ? optimizedMessages : messages;
     
-    // check if we need to optimize the conversation before sending
+    // optimize conversation if getting too long
     const currentModel = presetConfig?.model || "gpt-4.1";
     if (shouldOptimizeConversation([...messagesToUse, { sender: "user", message: cleanInput }], systemPrompt.content, currentModel)) {
       try {
         const optimized = await optimizeConversation([...messagesToUse, { sender: "user", message: cleanInput }], systemPrompt.content, currentModel);
-        messagesToUse = optimized.slice(0, -1); // Remove the input message we just added
+        messagesToUse = optimized.slice(0, -1); // remove the input we just added
         setOptimizedMessages(messagesToUse);
         
-        // Show notification that conversation was optimized
+        // tell user we optimized the conversation
         setMessages((prev) => [
           ...prev,
           { sender: "bot", message: "*Conversation optimized to manage token usage. Some older messages have been summarized.*" },
@@ -593,7 +754,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
       }
     }
     
-    // build conversation context with system prompt + message history
+    // build conversation for api call
     const conversationPayload = [
       systemPrompt,
       ...messagesToUse.map((msg) => ({
@@ -615,7 +776,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
         signal: controller.signal,
       });
 
-      // stream response chunks and update ui in real time
+      // stream response and update ui
       let fullResponse = "";
       for await (const chunk of stream) {
         if (controller.signal.aborted) break;
@@ -634,14 +795,14 @@ const CustomChat: React.FC<CustomChatProps> = ({
         ]);
         setStreamingMessage("");
         
-        // clear optimized messages after successful response
-        // this ensures the full conversation history is preserved
+        // clear optimized messages after response
+        // keep full conversation history
         if (optimizedMessages.length > 0) {
           setOptimizedMessages([]);
         }
       }
     } catch (e: unknown) {
-      // api call failed
+      // api error
       if (e instanceof Error && e.name !== 'AbortError') {
         let errorMessage = "Something went wrong, try again";
         
@@ -655,7 +816,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
           errorMessage = "Rate limit exceeded. Please wait a moment and try again.";
         } else if (e.message.includes('context_length_exceeded') || e.message.includes('maximum context length') || e.message.includes('token limit') || e.message.includes('413')) {
           errorMessage = "Message too long for this model. The conversation has been optimized to fit within token limits.";
-          // Trigger conversation optimization
+          // try to optimize conversation
           try {
             const optimized = truncateConversation(messages, systemPrompt.content, presetConfig?.model || "gpt-4.1");
             setOptimizedMessages(optimized);
@@ -678,18 +839,24 @@ const CustomChat: React.FC<CustomChatProps> = ({
       setAbortController(null);
       setStreamingMessage("");
     }
-  };
+  }, [input, isTyping, messages, optimizedMessages, systemPrompt.content, presetConfig, setMessages, setIsGenerating, setStreamingMessage, setOptimizedMessages]);
 
-  const send = () => {
+  // event handlers that dont cause re-renders
+  const send = useCallback(() => {
     sendMessage();
-  };
+  }, [sendMessage]);
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const onKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       send();
     }
-  };
+  }, [send]);
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    adjustTextareaHeight(textareaRef.current);
+  }, []);
 
 
   return (
@@ -724,118 +891,15 @@ const CustomChat: React.FC<CustomChatProps> = ({
         ref={chatFeedRef}
       >
         <div className="max-w-4xl mx-auto space-y-6">
-          {messages.length === 0 && (
-            <div className="text-center py-16">
-              <div className="mb-6">
-                <div 
-                  className="w-12 h-12 mx-auto rounded-xl flex items-center justify-center mb-4"
-                  style={{
-                    backgroundColor: presetConfig.subtitle ? presetConfig.theme.primary : '#FCF8DD'
-                  }}
-                >
-                  {presetConfig.subtitle ? (
-                    <FaComments className="text-white text-lg" />
-                  ) : (
-                    <FaSearch className="text-[#112f5e] text-lg" />
-                  )}
-                </div>
-              </div>
-              <h3 className="text-2xl font-semibold text-[#FCF8DD] mb-3">
-                {presetConfig.title}
-              </h3>
-              <p className="text-[#FCF8DD]/80 text-base leading-relaxed max-w-xl mx-auto">
-                {presetConfig.subtitle || "Start a conversation using the preset configuration selected."}
-              </p>
-            </div>
-          )}
-          {messages.map((msg, index) => (
-            <div
-              key={index}
-              className={`flex ${
-                msg.sender === "user" ? "justify-end" : "justify-start"
-              } mb-4`}
-            >
-              <div
-                className={`${
-                  msg.sender === "user"
-                    ? "max-w-3xl w-auto bg-[#FCF8DD] text-[#112f5e] shadow-sm border border-[#FCF8DD]/20 rounded-lg px-3 py-3 leading-relaxed whitespace-pre-wrap"
-                    : "max-w-4xl w-full md:w-auto text-[#FCF8DD] text-base leading-relaxed px-3 md:px-6 overflow-hidden markdown-content"
-                }`}
-              >
-                {msg.sender === "user" ? (
-                  <div className="whitespace-pre-wrap">{msg.message}</div>
-                ) : (
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm, remarkMath]}
-                    rehypePlugins={[rehypeKatex]}
-                    skipHtml={true}
-                    components={markdownComponents}
-                  >
-                    {msg.message}
-                  </ReactMarkdown>
-                )}
-              </div>
-            </div>
-          ))}
-
-          {/* Token warning banner */}
-          {showTokenWarning && tokenUsage && !isTyping && (
-            <div className="mb-4 max-w-4xl mx-auto">
-              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-                <div className="flex items-center gap-2 text-yellow-400">
-                  <FaExclamationTriangle className="text-sm" />
-                  <span className="text-sm font-medium">
-                    {tokenUsage.level === 'danger' 
-                      ? 'Token limit nearly reached! Older messages may be summarized.'
-                      : 'High token usage detected. Consider shorter messages.'}
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <TokenUsageIndicator usage={tokenUsage} showDetails={true} compact={false} />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Optimization notice */}
-          {optimizedMessages.length > 0 && (
-            <div className="mb-4 max-w-4xl mx-auto">
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                <div className="flex items-center gap-2 text-blue-400">
-                  <FaComments className="text-sm" />
-                  <span className="text-sm">
-                    Conversation optimized ({messages.length - optimizedMessages.length} older messages summarized)
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {isTyping && (
-            <div className="flex justify-start mb-4">
-              <div className="max-w-4xl w-full md:w-auto text-[#FCF8DD] text-base leading-relaxed px-3 md:px-6 overflow-hidden markdown-content">
-                {streamingMessage ? (
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm, remarkMath]}
-                    rehypePlugins={[rehypeKatex]}
-                    skipHtml={true}
-                    components={markdownComponents}
-                  >
-                    {streamingMessage}
-                  </ReactMarkdown>
-                ) : (
-                  <div className="flex items-center space-x-2">
-                    <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-[#FCF8DD]/80 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-[#FCF8DD]/60 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                      <div className="w-2 h-2 bg-[#FCF8DD]/40 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                    </div>
-                    <span className="text-[#FCF8DD]/80 text-sm">Thinking...</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+          <ChatMessagesContainer
+            messages={messages}
+            presetConfig={presetConfig}
+            showTokenWarning={showTokenWarning}
+            tokenUsage={tokenUsage}
+            isTyping={isTyping}
+            optimizedMessages={optimizedMessages}
+            streamingMessage={streamingMessage}
+          />
         </div>
       </div>
 
@@ -860,10 +924,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
               }`}
               placeholder={tokenUsage?.level === 'danger' ? 'Token limit nearly reached - keep messages short...' : 'type your message here...'}
               value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                adjustTextareaHeight(textareaRef.current);
-              }}
+              onChange={handleInputChange}
               onKeyDown={onKeyDown}
               rows={1}
             />
