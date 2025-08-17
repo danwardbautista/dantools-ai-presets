@@ -10,6 +10,7 @@ export interface PresetConfig {
   icon: string;
   systemPrompt: string;
   model?: string;
+  temperature?: number;
   theme: {
     primary: string;
     secondary: string;

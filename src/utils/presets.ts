@@ -7,6 +7,7 @@ export const defaultPresets: PresetConfig[] = [
     subtitle: "Straight-to-the-point, fact-based responses without sugar-coating",
     icon: 'zap',
     model: 'gpt-4.1',
+    temperature: 0.3,
     theme: {
       primary: "#DC2626",
       secondary: "#EF4444",
@@ -46,6 +47,7 @@ export const defaultPresets: PresetConfig[] = [
     subtitle: "Helps you create effective presets based on your specific needs",
     icon: 'tools',
     model: 'gpt-4.1',
+    temperature: 0.7,
     theme: {
       primary: "#8B5CF6",
       secondary: "#A78BFA",
@@ -93,6 +95,7 @@ export const defaultPresets: PresetConfig[] = [
     subtitle: "Standard ChatGPT experience",
     icon: 'chat',
     model: 'gpt-4o',
+    temperature: 0.7,
     theme: {
       primary: "#14B8A6",
       secondary: "#2DD4BF",

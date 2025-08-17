@@ -18,6 +18,7 @@ const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose, onSave, edit
     icon: 'code',
     systemPrompt: '',
     model: gptModelOptions[0].value,
+    temperature: 0.7,
     theme: themePresets[0],
     isCustom: true,
   });
@@ -61,6 +62,7 @@ const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose, onSave, edit
         icon: editingPreset.icon,
         systemPrompt: editingPreset.systemPrompt,
         model: editingPreset.model || gptModelOptions[0].value,
+        temperature: editingPreset.temperature || 0.7,
         theme: editingPreset.theme,
         isCustom: editingPreset.isCustom,
       });
@@ -78,6 +80,7 @@ const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose, onSave, edit
         icon: 'code',
         systemPrompt: '',
         model: gptModelOptions[0].value,
+        temperature: 0.7,
         theme: themePresets[0],
         isCustom: true,
       });
@@ -170,25 +173,45 @@ const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose, onSave, edit
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-[#FCF8DD]/90 mb-2">
-              GPT Model *
-            </label>
-            <select
-              value={formData.model}
-              onChange={(e) => setFormData(prev => ({ ...prev, model: e.target.value }))}
-              className="w-full px-3 py-2 border border-[#FCF8DD]/30 rounded-lg focus:ring-2 focus:ring-[#FCF8DD]/50 focus:border-[#FCF8DD] outline-none bg-[#0d2549] text-[#FCF8DD] cursor-pointer"
-              required
-            >
-              {gptModelOptions.map((option) => (
-                <option key={option.value} value={option.value} className="bg-[#0d2549] text-[#FCF8DD]">
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <p className="text-sm text-[#FCF8DD]/60 mt-1">
-              Choose the GPT model for this preset. GPT-4.1 and GPT-4o variants are available.
-            </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-[#FCF8DD]/90 mb-2">
+                GPT Model *
+              </label>
+              <select
+                value={formData.model}
+                onChange={(e) => setFormData(prev => ({ ...prev, model: e.target.value }))}
+                className="w-full px-3 py-2 border border-[#FCF8DD]/30 rounded-lg focus:ring-2 focus:ring-[#FCF8DD]/50 focus:border-[#FCF8DD] outline-none bg-[#0d2549] text-[#FCF8DD] cursor-pointer"
+                required
+              >
+                {gptModelOptions.map((option) => (
+                  <option key={option.value} value={option.value} className="bg-[#0d2549] text-[#FCF8DD]">
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-sm text-[#FCF8DD]/60 mt-1">
+                Choose the GPT model for this preset.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-[#FCF8DD]/90 mb-2">
+                Temperature
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="2"
+                step="0.1"
+                value={formData.temperature}
+                onChange={(e) => setFormData(prev => ({ ...prev, temperature: parseFloat(e.target.value) }))}
+                className="w-full px-3 py-2 border border-[#FCF8DD]/30 rounded-lg focus:ring-2 focus:ring-[#FCF8DD]/50 focus:border-[#FCF8DD] outline-none bg-[#0d2549] text-[#FCF8DD]"
+              />
+              <p className="text-sm text-[#FCF8DD]/60 mt-1">
+                Controls randomness. 0.0-0.3: focused, 0.4-0.7: balanced, 0.8-1.0: creative.
+              </p>
+            </div>
           </div>
 
 

@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { FaCog, FaBars, FaChevronRight, FaPlus, FaStar } from 'react-icons/fa';
+import { FaCog, FaBars, FaChevronRight, FaPlus, FaStar, FaTrash } from 'react-icons/fa';
 import CustomChat from './components/CustomChat';
 import ApiKeyModal from './components/ApiKeyModal';
 import SettingsModal from './components/SettingsModal';
+import ConfirmDeleteModal from './components/ConfirmDeleteModal';
 import Presets from './pages/Presets';
 import { ChatMessage, PresetConfig, SavedConversation, ScannerType } from './types';
 import { defaultPresets, findPresetById } from './utils/presets';
@@ -21,6 +22,8 @@ const AppContent: React.FC = () => {
   const [presets, setPresets] = useState<PresetConfig[]>(defaultPresets);
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteModalData, setDeleteModalData] = useState<{ title: string; scannerType: string; conversationId: string } | null>(null);
   
   // keep conversations separate per scanner type
   const [savedConversations, setSavedConversations] = useState<Record<ScannerType, SavedConversation[]>>({});
@@ -236,6 +239,33 @@ const AppContent: React.FC = () => {
     removeFromStorage(`dantools-conversations-${scannerType}`);
   };
 
+  const deleteConversation = (scannerType: ScannerType, conversationId: string) => {
+    setSavedConversations(prev => {
+      const conversations = prev[scannerType] || [];
+      const filteredConversations = conversations.filter(conv => conv.id !== conversationId);
+      saveToStorage(`dantools-conversations-${scannerType}`, filteredConversations);
+      return {
+        ...prev,
+        [scannerType]: filteredConversations
+      };
+    });
+    
+    // if the deleted conversation is currently active, clear the current chat
+    const currentConversationMessages = currentMessages[scannerType] || [];
+    if (currentConversationMessages.length > 0) {
+      const firstUserMessage = currentConversationMessages.find(msg => msg.sender === "user");
+      const deletedConversation = savedConversations[scannerType]?.find(conv => conv.id === conversationId);
+      const deletedFirstUserMessage = deletedConversation?.messages.find(msg => msg.sender === "user");
+      
+      if (firstUserMessage && deletedFirstUserMessage && 
+          firstUserMessage.message === deletedFirstUserMessage.message) {
+        setCurrentMessages(prev => ({ ...prev, [scannerType]: [] }));
+        setCurrentScannerType(null);
+        navigate('/');
+      }
+    }
+  };
+
   // starts fresh conversation for selected preset
   const startNewConversation = async (scannerType: ScannerType) => {
     if (isGenerating) return; // dont allow switching while generating
@@ -282,6 +312,19 @@ const AppContent: React.FC = () => {
 
   const handleCloseSettings = () => {
     setShowSettingsModal(false);
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteModalData) {
+      deleteConversation(deleteModalData.scannerType, deleteModalData.conversationId);
+    }
+    setShowDeleteModal(false);
+    setDeleteModalData(null);
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteModal(false);
+    setDeleteModalData(null);
   };
 
   // gets display title for current conversation
@@ -357,6 +400,13 @@ const AppContent: React.FC = () => {
         <SettingsModal 
           isOpen={showSettingsModal}
           onClose={handleCloseSettings}
+        />
+        <ConfirmDeleteModal
+          isOpen={showDeleteModal}
+          onClose={handleCancelDelete}
+          onConfirm={handleConfirmDelete}
+          title="Delete Conversation"
+          message={deleteModalData ? `Are you sure you want to delete "${deleteModalData.title}"? This action cannot be undone.` : ''}
         />
         {/* Mobile backdrop */}
         {isMobileMenuOpen && (
@@ -464,41 +514,66 @@ const AppContent: React.FC = () => {
                     getAllConversations().slice(0, 20).map((conversation) => {
                       const isActive = isConversationActive(conversation);
                       return (
-                        <button
-                          key={`${conversation.scannerType}-${conversation.id}`}
-                          className={`
-                            w-full text-left p-3 rounded-lg transition-all duration-200
-                            ${isActive 
-                              ? 'bg-[#FCF8DD] text-[#112f5e] font-semibold' 
-                              : isGenerating
-                                ? 'text-[#FCF8DD]/40 cursor-not-allowed opacity-50'
-                                : 'text-[#FCF8DD]/70 hover:bg-[#FCF8DD]/10 hover:text-[#FCF8DD]/90'
-                            }
-                          `}
-                          onClick={() => loadConversation(conversation.scannerType, conversation)}
-                          disabled={isGenerating}
-                        >
-                          <div className="w-full">
-                            <div className="flex items-center gap-2 mb-1">
-                              <div 
-                                className="w-3 h-3 rounded-full flex-shrink-0"
-                                style={{ 
-                                  background: (() => {
-                                    const preset = findPresetById(presets, conversation.scannerType);
-                                    return preset ? preset.theme.primary : '#FCF8DD';
-                                  })()
-                                }}
-                              />
-                              <div className="text-sm font-medium truncate flex-1 min-w-0">
-                                {String(conversation.title)}
+                        <div className="relative group">
+                          <button
+                            key={`${conversation.scannerType}-${conversation.id}`}
+                            className={`
+                              w-full text-left p-3 rounded-lg transition-all duration-200
+                              ${isActive 
+                                ? 'bg-[#FCF8DD] text-[#112f5e] font-semibold' 
+                                : isGenerating
+                                  ? 'text-[#FCF8DD]/40 cursor-not-allowed opacity-50'
+                                  : 'text-[#FCF8DD]/70 hover:bg-[#FCF8DD]/10 hover:text-[#FCF8DD]/90'
+                              }
+                            `}
+                            onClick={() => loadConversation(conversation.scannerType, conversation)}
+                            disabled={isGenerating}
+                          >
+                            <div className="w-full">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div 
+                                  className="w-3 h-3 rounded-full flex-shrink-0"
+                                  style={{ 
+                                    background: (() => {
+                                      const preset = findPresetById(presets, conversation.scannerType);
+                                      return preset ? preset.theme.primary : '#FCF8DD';
+                                    })()
+                                  }}
+                                />
+                                <div className="text-sm font-medium truncate flex-1 min-w-0 pr-8">
+                                  {String(conversation.title)}
+                                </div>
+                                {isActive && <div className="w-1.5 h-1.5 bg-[#112f5e] rounded-full flex-shrink-0 animate-pulse" />}
                               </div>
-                              {isActive && <div className="w-1.5 h-1.5 bg-[#112f5e] rounded-full flex-shrink-0 animate-pulse" />}
+                              <div className={`text-xs opacity-80 ${isActive ? 'text-[#112f5e]/70' : 'text-[#FCF8DD]/60'}`}>
+                                {new Date(conversation.timestamp).toLocaleDateString()}
+                              </div>
                             </div>
-                            <div className={`text-xs opacity-80 ${isActive ? 'text-[#112f5e]/70' : 'text-[#FCF8DD]/60'}`}>
-                              {new Date(conversation.timestamp).toLocaleDateString()}
-                            </div>
-                          </div>
-                        </button>
+                          </button>
+                          
+                          <button
+                            className={`absolute bottom-2 right-2 p-1.5 rounded-md transition-all duration-200 opacity-0 group-hover:opacity-100 ${
+                              isActive 
+                                ? 'text-[#112f5e]/60 hover:text-red-600 hover:bg-red-100/20' 
+                                : 'text-[#FCF8DD]/60 hover:text-red-400 hover:bg-red-500/20'
+                            } ${isGenerating ? 'cursor-not-allowed opacity-30' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!isGenerating) {
+                                setDeleteModalData({
+                                  title: conversation.title,
+                                  scannerType: conversation.scannerType,
+                                  conversationId: conversation.id
+                                });
+                                setShowDeleteModal(true);
+                              }
+                            }}
+                            disabled={isGenerating}
+                            title="Delete conversation"
+                          >
+                            <FaTrash className="text-xs" />
+                          </button>
+                        </div>
                       );
                     })
                   ) : (

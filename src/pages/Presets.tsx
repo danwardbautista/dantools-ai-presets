@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { FaEdit, FaPlus, FaTrash, FaExclamationTriangle, FaTimes, FaStar } from "react-icons/fa";
 import PresetModal from "../components/PresetModal";
+import ConfirmDeleteModal from "../components/ConfirmDeleteModal";
 import { PresetConfig } from '../types';
 import { defaultPresets } from '../utils/presets';
 import { loadFromStorage, removeFromStorage, saveToStorageWithEvent } from '../utils/localStorage';
@@ -11,6 +12,8 @@ const Presets: React.FC = () => {
   const [editingPreset, setEditingPreset] = useState<PresetConfig | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [showPresetDeleteModal, setShowPresetDeleteModal] = useState(false);
+  const [presetToDelete, setPresetToDelete] = useState<PresetConfig | null>(null);
 
   useEffect(() => {
     const savedPresets = loadFromStorage('dantools-presets', defaultPresets);
@@ -36,14 +39,26 @@ const Presets: React.FC = () => {
     setShowPresetModal(true);
   };
 
-  const deletePreset = (presetId: string) => {
-    if (window.confirm('Are you sure you want to delete this preset? This will also remove all conversations associated with it.')) {
-      const newPresets = presets.filter(p => p.id !== presetId);
+  const deletePreset = (preset: PresetConfig) => {
+    setPresetToDelete(preset);
+    setShowPresetDeleteModal(true);
+  };
+
+  const handleConfirmPresetDelete = () => {
+    if (presetToDelete) {
+      const newPresets = presets.filter(p => p.id !== presetToDelete.id);
       savePresetsToStorage(newPresets);
       
       // Clear conversations for deleted preset
-      removeFromStorage(`dantools-conversations-${presetId}`);
+      removeFromStorage(`dantools-conversations-${presetToDelete.id}`);
     }
+    setShowPresetDeleteModal(false);
+    setPresetToDelete(null);
+  };
+
+  const handleCancelPresetDelete = () => {
+    setShowPresetDeleteModal(false);
+    setPresetToDelete(null);
   };
 
   // wipe presets and conversations from localStorage
@@ -179,7 +194,7 @@ const Presets: React.FC = () => {
                   </button>
                   {preset.isCustom && (
                     <button
-                      onClick={() => deletePreset(preset.id)}
+                      onClick={() => deletePreset(preset)}
                       className="bg-red-500/20 hover:bg-red-500/30 text-red-300 hover:text-red-200 px-3 py-2 rounded-lg transition-all duration-200 flex items-center justify-center border border-red-500/30 hover:border-red-500/50"
                     >
                       <FaTrash className="text-xs" />
@@ -287,6 +302,14 @@ const Presets: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDeleteModal
+        isOpen={showPresetDeleteModal}
+        onClose={handleCancelPresetDelete}
+        onConfirm={handleConfirmPresetDelete}
+        title="Delete Preset"
+        message={presetToDelete ? `Are you sure you want to delete "${presetToDelete.title}"? This will also remove all conversations associated with it.` : ''}
+      />
       </div>
     </div>
   );
