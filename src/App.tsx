@@ -71,7 +71,7 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     closeMobileMenu();
-  }, [location.pathname]);
+  }, [location.pathname, closeMobileMenu]);
 
   // close mobile menu on window resize to desktop
   useEffect(() => {
@@ -83,7 +83,7 @@ const AppContent: React.FC = () => {
     
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [closeMobileMenu]);
 
   useEffect(() => {
     const loadedConversations: Record<ScannerType, SavedConversation[]> = {};
@@ -108,7 +108,7 @@ const AppContent: React.FC = () => {
     setCurrentMessages(prev => ({ ...prev, ...initialMessages }));
     setIsLoadingConversation(prev => ({ ...prev, ...initialLoading }));
     lastSavedMessageCountRef.current = { ...lastSavedMessageCountRef.current, ...initialCounts };
-  }, [presets]);
+  }, [presets, currentMessages]);
 
   // saves conversation to localstorage with auto-generated title
   const saveConversation = useCallback(async (scannerType: ScannerType, messages: ChatMessage[], forceUpdate = false) => {

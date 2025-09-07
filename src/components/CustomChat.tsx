@@ -328,7 +328,7 @@ const ChatMessagesContainer: React.FC<{
   messages: ChatMessage[];
   presetConfig: PresetConfig;
   showTokenWarning: boolean;
-  tokenUsage: any;
+  tokenUsage: TokenUsage;
   isTyping: boolean;
   optimizedMessages: ChatMessage[];
   streamingMessage: string;
@@ -488,10 +488,10 @@ const CustomChat: React.FC<CustomChatProps> = ({
     };
   }, [scannerType]);
 
-  const systemPrompt = {
+  const systemPrompt = useMemo(() => ({
     role: "system" as const,
     content: customSystemPrompt || presetConfig?.systemPrompt || "You are a helpful AI assistant.",
-  };
+  }), [customSystemPrompt, presetConfig?.systemPrompt]);
 
   // wait a bit before calculating tokens so typing doesnt lag
   const debouncedTokenCalculation = useMemo(() => {
@@ -839,7 +839,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
       setAbortController(null);
       setStreamingMessage("");
     }
-  }, [input, isTyping, messages, optimizedMessages, systemPrompt.content, presetConfig, setMessages, setIsGenerating, setStreamingMessage, setOptimizedMessages]);
+  }, [input, isTyping, messages, optimizedMessages, systemPrompt, presetConfig, setMessages, setIsGenerating, setStreamingMessage, setOptimizedMessages]);
 
   // event handlers that dont cause re-renders
   const send = useCallback(() => {
@@ -895,7 +895,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
             messages={messages}
             presetConfig={presetConfig}
             showTokenWarning={showTokenWarning}
-            tokenUsage={tokenUsage}
+            tokenUsage={tokenUsage || { estimated: 0, limit: 0, percentage: 0, level: 'safe', remaining: 0 }}
             isTyping={isTyping}
             optimizedMessages={optimizedMessages}
             streamingMessage={streamingMessage}
