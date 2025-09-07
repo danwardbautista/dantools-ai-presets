@@ -286,11 +286,34 @@ const markdownComponents = {
   }
 };
 
-// message bubble that doesnt re-render unless content changes
+// optimized message bubble with better memoization
 const MessageBubble: React.FC<{
   message: ChatMessage;
   index: number;
 }> = memo(({ message }) => {
+  // memoize markdown rendering to prevent unnecessary re-renders
+  const renderedContent = useMemo(() => {
+    if (message.sender === "user") {
+      return <div className="whitespace-pre-wrap">{message.message}</div>;
+    }
+    
+    // only render markdown for bot messages, with truncation for very long messages
+    const truncatedMessage = message.message.length > 10000 
+      ? message.message.substring(0, 10000) + "\n\n*[Message truncated for performance]*"
+      : message.message;
+    
+    return (
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        skipHtml={true}
+        components={markdownComponents}
+      >
+        {truncatedMessage}
+      </ReactMarkdown>
+    );
+  }, [message.message, message.sender]);
+  
   return (
     <div
       className={`flex ${
@@ -304,26 +327,20 @@ const MessageBubble: React.FC<{
             : "max-w-4xl w-full md:w-auto text-[#FCF8DD] text-base leading-relaxed px-3 md:px-6 overflow-hidden markdown-content"
         }`}
       >
-        {message.sender === "user" ? (
-          <div className="whitespace-pre-wrap">{message.message}</div>
-        ) : (
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm, remarkMath]}
-            rehypePlugins={[rehypeKatex]}
-            skipHtml={true}
-            components={markdownComponents}
-          >
-            {message.message}
-          </ReactMarkdown>
-        )}
+        {renderedContent}
       </div>
     </div>
   );
+}, (prevProps, nextProps) => {
+  // custom comparison to prevent unnecessary re-renders
+  return prevProps.message.message === nextProps.message.message &&
+         prevProps.message.sender === nextProps.message.sender &&
+         prevProps.index === nextProps.index;
 });
 
 MessageBubble.displayName = 'MessageBubble';
 
-// chat area wrapper to avoid re-rendering everything
+// optimized chat container with better memory management
 const ChatMessagesContainer: React.FC<{
   messages: ChatMessage[];
   presetConfig: PresetConfig;
@@ -333,45 +350,57 @@ const ChatMessagesContainer: React.FC<{
   optimizedMessages: ChatMessage[];
   streamingMessage: string;
 }> = memo(({ messages, presetConfig, showTokenWarning, tokenUsage, isTyping, optimizedMessages, streamingMessage }) => {
+  
+  // only render recent messages to improve performance
+  const displayMessages = useMemo(() => {
+    // show only last 50 messages for better performance
+    return messages.slice(-50);
+  }, [messages]);
+  
+  // memoize empty state to prevent re-renders
+  const emptyState = useMemo(() => (
+    <div className="text-center py-16">
+      <div className="mb-6">
+        <div 
+          className="w-12 h-12 mx-auto rounded-xl flex items-center justify-center mb-4"
+          style={{
+            backgroundColor: presetConfig.subtitle ? presetConfig.theme.primary : '#FCF8DD'
+          }}
+        >
+          {presetConfig.subtitle ? (
+            <FaComments className="text-white text-lg" />
+          ) : (
+            <FaSearch className="text-[#112f5e] text-lg" />
+          )}
+        </div>
+      </div>
+      <h3 className="text-2xl font-semibold text-[#FCF8DD] mb-3">
+        {presetConfig.title}
+      </h3>
+      <p className="text-[#FCF8DD]/80 text-base leading-relaxed max-w-xl mx-auto">
+        {presetConfig.subtitle || "Start a conversation using the preset configuration selected."}
+      </p>
+    </div>
+  ), [presetConfig.title, presetConfig.subtitle, presetConfig.theme.primary]);
+  
   return (
     <>
-      {messages.length === 0 && (
-        <div className="text-center py-16">
-          <div className="mb-6">
-            <div 
-              className="w-12 h-12 mx-auto rounded-xl flex items-center justify-center mb-4"
-              style={{
-                backgroundColor: presetConfig.subtitle ? presetConfig.theme.primary : '#FCF8DD'
-              }}
-            >
-              {presetConfig.subtitle ? (
-                <FaComments className="text-white text-lg" />
-              ) : (
-                <FaSearch className="text-[#112f5e] text-lg" />
-              )}
-            </div>
-          </div>
-          <h3 className="text-2xl font-semibold text-[#FCF8DD] mb-3">
-            {presetConfig.title}
-          </h3>
-          <p className="text-[#FCF8DD]/80 text-base leading-relaxed max-w-xl mx-auto">
-            {presetConfig.subtitle || "Start a conversation using the preset configuration selected."}
-          </p>
-        </div>
-      )}
+      {displayMessages.length === 0 && emptyState}
       
-      <VirtualMessageList
-        messages={messages}
-        renderMessage={(message, index) => (
-          <MessageBubble
-            key={`${index}-${message.sender}-${message.message.slice(0, 50)}`}
-            message={message}
-            index={index}
-          />
-        )}
-        containerHeight={600}
-        estimatedItemHeight={100}
-      />
+      {displayMessages.length > 0 && (
+        <VirtualMessageList
+          messages={displayMessages}
+          renderMessage={(message, index) => (
+            <MessageBubble
+              key={`${message.sender}-${index}-${message.message.slice(0, 30)}`}
+              message={message}
+              index={index}
+            />
+          )}
+          containerHeight={600}
+          estimatedItemHeight={100}
+        />
+      )}
 
       {/* token warning */}
       {showTokenWarning && tokenUsage && !isTyping && (
@@ -457,6 +486,8 @@ const CustomChat: React.FC<CustomChatProps> = ({
   const [lastScrollTop, setLastScrollTop] = useState(0);
   const scrollTimeoutRef = useRef<number | null>(null);
   const streamingScrollRef = useRef<number | null>(null);
+  const debounceTimeoutRef = useRef<number | null>(null);
+  const cleanupFunctionsRef = useRef<(() => void)[]>([]);
 
   useEffect(() => {
     const loadCustomPrompts = () => {
@@ -493,20 +524,21 @@ const CustomChat: React.FC<CustomChatProps> = ({
     content: customSystemPrompt || presetConfig?.systemPrompt || "You are a helpful AI assistant.",
   }), [customSystemPrompt, presetConfig?.systemPrompt]);
 
-  // wait a bit before calculating tokens so typing doesnt lag
-  const debouncedTokenCalculation = useMemo(() => {
-    let timeoutId: number;
-    return (messages: ChatMessage[], input: string, systemContent: string, model: string) => {
-      clearTimeout(timeoutId);
-      timeoutId = window.setTimeout(() => {
-        const currentMessages = optimizedMessages.length > 0 ? optimizedMessages : messages;
-        const estimatedTokens = calculateConversationTokens(currentMessages, systemContent, input);
-        const usage = getTokenUsage(estimatedTokens, model);
-        
-        setTokenUsage(usage);
-        setShowTokenWarning(usage.level === 'warning' || usage.level === 'danger');
-      }, 150); // wait 150ms
-    };
+  // wait a bit before calculating tokens so typing doesnt lag - with proper cleanup
+  const debouncedTokenCalculation = useCallback((messages: ChatMessage[], input: string, systemContent: string, model: string) => {
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+    
+    debounceTimeoutRef.current = window.setTimeout(() => {
+      const currentMessages = optimizedMessages.length > 0 ? optimizedMessages : messages;
+      const estimatedTokens = calculateConversationTokens(currentMessages, systemContent, input);
+      const usage = getTokenUsage(estimatedTokens, model);
+      
+      setTokenUsage(usage);
+      setShowTokenWarning(usage.level === 'warning' || usage.level === 'danger');
+      debounceTimeoutRef.current = null;
+    }, 150); // wait 150ms
   }, [optimizedMessages]);
 
   // calculate tokens but debounced
@@ -553,22 +585,29 @@ const CustomChat: React.FC<CustomChatProps> = ({
 
     chatFeed.addEventListener('scroll', handleScroll, { passive: true });
     
-    return () => {
+    const cleanup = () => {
       chatFeed.removeEventListener('scroll', handleScroll);
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = null;
       }
     };
+    
+    cleanupFunctionsRef.current.push(cleanup);
+    
+    return cleanup;
   }, [handleScroll]);
 
-  // auto scroll when not streaming
+  // auto scroll when not streaming - with proper cleanup
   useEffect(() => {
     const chatFeed = chatFeedRef.current;
     if (!chatFeed) return;
 
+    let timeoutId: number | null = null;
+    
     // scroll to bottom smoothly
     if (!streamingMessage) {
-      const timeout = setTimeout(() => {
+      timeoutId = window.setTimeout(() => {
         if (chatFeed) {
           const targetScrollTop = chatFeed.scrollHeight - chatFeed.clientHeight;
           const currentScrollTop = chatFeed.scrollTop;
@@ -585,13 +624,22 @@ const CustomChat: React.FC<CustomChatProps> = ({
             chatFeed.scrollTop = targetScrollTop;
           }
         }
+        timeoutId = null;
       }, 100);
       
-      return () => clearTimeout(timeout);
+      const cleanup = () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+      };
+      
+      cleanupFunctionsRef.current.push(cleanup);
+      return cleanup;
     }
   }, [messages, streamingMessage]);
 
-  // scroll following during streaming
+  // scroll following during streaming - with proper cleanup
   useEffect(() => {
     const chatFeed = chatFeedRef.current;
     if (!chatFeed || !streamingMessage) {
@@ -628,28 +676,61 @@ const CustomChat: React.FC<CustomChatProps> = ({
       }, 60); // run every 60ms
     }
 
-    return () => {
+    const cleanup = () => {
       if (streamingScrollRef.current) {
         clearInterval(streamingScrollRef.current);
         streamingScrollRef.current = null;
       }
     };
+    
+    cleanupFunctionsRef.current.push(cleanup);
+    return cleanup;
   }, [streamingMessage, userScrolledUp]);
 
   // removed duplicate scroll stuff
 
-  // scroll to bottom when opening chat
+  // scroll to bottom when opening chat - with cleanup
   useEffect(() => {
     if (chatFeedRef.current) {
       const chatFeed = chatFeedRef.current;
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         chatFeed.scrollTop = chatFeed.scrollHeight;
       }, 50);
+      
+      const cleanup = () => clearTimeout(timeoutId);
+      cleanupFunctionsRef.current.push(cleanup);
     }
+    
     // reset stuff when switching chats
     setOptimizedMessages([]);
     setUserScrolledUp(false);
     setLastScrollTop(0);
+    
+    // clean up previous chat's memory
+    return () => {
+      // clear any remaining timeouts
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+        debounceTimeoutRef.current = null;
+      }
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = null;
+      }
+      if (streamingScrollRef.current) {
+        clearInterval(streamingScrollRef.current);
+        streamingScrollRef.current = null;
+      }
+      
+      // run all cleanup functions - capture ref to avoid stale closure
+      const cleanupFunctions = cleanupFunctionsRef.current;
+      cleanupFunctions.forEach(cleanup => cleanup());
+      cleanupFunctions.length = 0;
+      
+      // clear message state to free memory
+      setOptimizedMessages([]);
+      setStreamingMessage("");
+    };
   }, [scannerType]); // trigger only on switch?
 
   useEffect(() => {
@@ -719,7 +800,14 @@ const CustomChat: React.FC<CustomChatProps> = ({
 
     const cleanInput = sanitizeInput(textToSend);
     const userMsg: ChatMessage = { sender: "user", message: cleanInput };
-    setMessages((prev) => [...prev, userMsg]);
+    
+    // limit message history to prevent memory bloat
+    setMessages((prev) => {
+      const updated = [...prev, userMsg];
+      // keep only last 100 messages to prevent memory issues
+      return updated.length > 100 ? updated.slice(-100) : updated;
+    });
+    
     setInput("");
     setIsTyping(true);
     setIsGenerating(true);
@@ -743,10 +831,11 @@ const CustomChat: React.FC<CustomChatProps> = ({
         setOptimizedMessages(messagesToUse);
         
         // tell user we optimized the conversation
-        setMessages((prev) => [
-          ...prev,
-          { sender: "bot", message: "*Conversation optimized to manage token usage. Some older messages have been summarized.*" },
-        ]);
+        setMessages((prev) => {
+          const updated = [...prev, { sender: "bot" as const, message: "*Conversation optimized to manage token usage. Some older messages have been summarized.*" }];
+          // keep only last 100 messages to prevent memory issues
+          return updated.length > 100 ? updated.slice(-100) : updated;
+        });
       } catch (error) {
         console.warn('Failed to optimize conversation, using truncation:', error);
         messagesToUse = truncateConversation([...messagesToUse, { sender: "user", message: cleanInput }], systemPrompt.content, currentModel).slice(0, -1);
@@ -789,10 +878,11 @@ const CustomChat: React.FC<CustomChatProps> = ({
       }
 
       if (!controller.signal.aborted) {
-        setMessages((prev) => [
-          ...prev,
-          { sender: "bot", message: fullResponse },
-        ]);
+        setMessages((prev) => {
+          const updated = [...prev, { sender: "bot" as const, message: fullResponse }];
+          // keep only last 100 messages to prevent memory issues
+          return updated.length > 100 ? updated.slice(-100) : updated;
+        });
         setStreamingMessage("");
         
         // clear optimized messages after response
@@ -820,24 +910,27 @@ const CustomChat: React.FC<CustomChatProps> = ({
           try {
             const optimized = truncateConversation(messages, systemPrompt.content, presetConfig?.model || "gpt-4.1");
             setOptimizedMessages(optimized);
-          } catch (optError) {
-            console.warn('Failed to optimize conversation:', optError);
+          } catch {
+            // Failed to optimize conversation, continue with error message
           }
         }
         
-        setMessages((prev) => [
-          ...prev,
-          {
-            sender: "bot",
-            message: errorMessage,
-          },
-        ]);
+        setMessages((prev) => {
+          const updated = [...prev, { sender: "bot" as const, message: errorMessage }];
+          // keep only last 100 messages to prevent memory issues
+          return updated.length > 100 ? updated.slice(-100) : updated;
+        });
       }
     } finally {
       setIsTyping(false);
       setIsGenerating(false);
       setAbortController(null);
       setStreamingMessage("");
+      
+      // Memory cleanup after request
+      if (abortController) {
+        setAbortController(null);
+      }
     }
   }, [input, isTyping, messages, optimizedMessages, systemPrompt, presetConfig, setMessages, setIsGenerating, setStreamingMessage, setOptimizedMessages]);
 

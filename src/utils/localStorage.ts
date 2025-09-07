@@ -1,30 +1,21 @@
 /**
- * Utility functions for localStorage operations
+ * utility functions for localStorage operations with memory optimization
  */
 
+import { optimizedLocalStorage } from './memoryManager';
+
 export const loadFromStorage = <T>(key: string, defaultValue: T): T => {
-  try {
-    const stored = localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : defaultValue;
-  } catch {
-    return defaultValue;
-  }
+  return optimizedLocalStorage.getItem(key, defaultValue);
 };
 
 export const saveToStorage = <T>(key: string, value: T): void => {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    console.warn(`Failed to save to localStorage: ${key}`, error);
-  }
+  // set a reasonable size limit for conversation data
+  const sizeLimit = key.includes('conversations') ? 2048 : 1024; // 2MB for conversations, 1MB for others
+  optimizedLocalStorage.setItem(key, value, sizeLimit);
 };
 
 export const removeFromStorage = (key: string): void => {
-  try {
-    localStorage.removeItem(key);
-  } catch (error) {
-    console.warn(`Failed to remove from localStorage: ${key}`, error);
-  }
+  optimizedLocalStorage.removeItem(key);
 };
 
 

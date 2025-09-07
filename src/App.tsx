@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { FaCog, FaBars, FaChevronRight, FaPlus, FaStar, FaTrash } from 'react-icons/fa';
+import { FaCog, FaBars, FaChevronRight, FaPlus, FaStar } from 'react-icons/fa';
 import CustomChat from './components/CustomChat';
 import ApiKeyModal from './components/ApiKeyModal';
 import SettingsModal from './components/SettingsModal';
 import ConfirmDeleteModal from './components/ConfirmDeleteModal';
+import LazyConversationList from './components/LazyConversationList';
 import Presets from './pages/Presets';
 import { ChatMessage, PresetConfig, SavedConversation, ScannerType } from './types';
 import { defaultPresets, findPresetById } from './utils/presets';
@@ -32,6 +33,8 @@ const AppContent: React.FC = () => {
   
   const currentMessagesRef = useRef<Record<ScannerType, ChatMessage[]>>(currentMessages);
   const lastSavedMessageCountRef = useRef<Record<ScannerType, number>>({});
+  const debouncedTimeoutRef = useRef<number | null>(null);
+  const cleanupFunctionsRef = useRef<(() => void)[]>([]);
 
   // Load presets from localStorage on mount and check for API key
   useEffect(() => {
@@ -100,7 +103,9 @@ const AppContent: React.FC = () => {
     const initialCounts: Record<ScannerType, number> = {};
     
     presets.forEach(preset => {
-      initialMessages[preset.id] = currentMessages[preset.id] || [];
+      // limit message history to prevent memory bloat
+      const existingMessages = currentMessages[preset.id] || [];
+      initialMessages[preset.id] = existingMessages.slice(-50); // keep only last 50 messages
       initialLoading[preset.id] = false;
       initialCounts[preset.id] = 0;
     });
@@ -136,8 +141,8 @@ const AppContent: React.FC = () => {
       
       const filteredConversations = prevConversations.filter(conv => conv.id !== conversation.id);
       const updated = (!existingConv || forceUpdate) 
-        ? [conversation, ...filteredConversations].slice(0, 10)
-        : sortConversationsByTimestamp([...filteredConversations, conversation]).slice(0, 10);
+        ? [conversation, ...filteredConversations].slice(0, 5) // reduce to 5 conversations per preset
+        : sortConversationsByTimestamp([...filteredConversations, conversation]).slice(0, 5);
       
       saveToStorage(`dantools-conversations-${scannerType}`, updated);
       lastSavedMessageCountRef.current[scannerType] = messages.length;
@@ -154,36 +159,37 @@ const AppContent: React.FC = () => {
     currentMessagesRef.current = currentMessages;
   }, [currentMessages]);
 
-  // auto save but dont run too often
-  const debouncedAutoSave = useMemo(() => {
-    let timeoutId: number;
-    return () => {
-      clearTimeout(timeoutId);
-      timeoutId = window.setTimeout(async () => {
-        const promises: Promise<void>[] = [];
+  // auto save but dont run too often - with proper cleanup
+  const debouncedAutoSave = useCallback(() => {
+    if (debouncedTimeoutRef.current) {
+      clearTimeout(debouncedTimeoutRef.current);
+    }
+    
+    debouncedTimeoutRef.current = window.setTimeout(async () => {
+      const promises: Promise<void>[] = [];
+      
+      presets.forEach(preset => {
+        const scannerType = preset.id;
+        const messages = currentMessages[scannerType];
+        const loading = isLoadingConversation[scannerType];
         
-        presets.forEach(preset => {
-          const scannerType = preset.id;
-          const messages = currentMessages[scannerType];
-          const loading = isLoadingConversation[scannerType];
-          
-          // dont save while loading
-          if (loading || !messages?.length) return;
-          
-          const lastMessage = messages[messages.length - 1];
-          // only save if theres new stuff
-          const hasNewContent = messages.length > (lastSavedMessageCountRef.current[scannerType] || 0);
-          
-          // save when bot replies or multiple user messages
-          if (lastMessage.sender === "bot" || 
-              (messages.filter(msg => msg.sender === "user").length > 1)) {
-            promises.push(saveConversation(scannerType, messages, hasNewContent));
-          }
-        });
+        // dont save while loading
+        if (loading || !messages?.length) return;
         
-        await Promise.all(promises);
-      }, 2000); // wait 2s to reduce saves
-    };
+        const lastMessage = messages[messages.length - 1];
+        // only save if theres new stuff
+        const hasNewContent = messages.length > (lastSavedMessageCountRef.current[scannerType] || 0);
+        
+        // save when bot replies or multiple user messages
+        if (lastMessage.sender === "bot" || 
+            (messages.filter(msg => msg.sender === "user").length > 1)) {
+          promises.push(saveConversation(scannerType, messages, hasNewContent));
+        }
+      });
+      
+      await Promise.all(promises);
+      debouncedTimeoutRef.current = null;
+    }, 2000); // wait 2s to reduce saves
   }, [presets, currentMessages, isLoadingConversation, saveConversation]);
 
   // auto save with debouncing
@@ -193,6 +199,9 @@ const AppContent: React.FC = () => {
 
   // save conversations when user leaves
   useEffect(() => {
+    // capture ref values at effect setup time to avoid stale closure warnings
+    const cleanupFunctions = cleanupFunctionsRef.current;
+    
     const onBeforeUnload = () => {
       Object.entries(currentMessagesRef.current).forEach(([scannerType, messages]) => {
         if (messages.length > 0) {
@@ -206,12 +215,28 @@ const AppContent: React.FC = () => {
     
     return () => {
       window.removeEventListener('beforeunload', onBeforeUnload);
-      // save when component dies
-      Object.entries(currentMessagesRef.current).forEach(([scannerType, messages]) => {
+      
+      // clear all timeouts and cleanup
+      if (debouncedTimeoutRef.current) {
+        clearTimeout(debouncedTimeoutRef.current);
+        debouncedTimeoutRef.current = null;
+      }
+      
+      // run all cleanup functions - use captured value
+      cleanupFunctions.forEach(cleanup => cleanup());
+      cleanupFunctions.length = 0;
+      
+      // save when component dies - capture ref value
+      const currentMessages = currentMessagesRef.current;
+      Object.entries(currentMessages).forEach(([scannerType, messages]) => {
         if (messages.length > 0) {
           saveConversation(scannerType as ScannerType, messages).catch(console.error);
         }
       });
+      
+      // clear large state objects to free memory
+      setSavedConversations({});
+      setCurrentMessages({});
     };
   }, [saveConversation]);
 
@@ -509,77 +534,18 @@ const AppContent: React.FC = () => {
                     Clear All
                   </button>
                 </div>
-                <div className="flex-1 overflow-y-auto px-2 space-y-1 min-h-0">
-                  {getAllConversations().length > 0 ? (
-                    getAllConversations().slice(0, 20).map((conversation) => {
-                      const isActive = isConversationActive(conversation);
-                      return (
-                        <div key={`${conversation.scannerType}-${conversation.id}`} className="relative group">
-                          <button
-                            className={`
-                              w-full text-left p-3 rounded-lg transition-all duration-200
-                              ${isActive 
-                                ? 'bg-[#FCF8DD] text-[#112f5e] font-semibold' 
-                                : isGenerating
-                                  ? 'text-[#FCF8DD]/40 cursor-not-allowed opacity-50'
-                                  : 'text-[#FCF8DD]/70 hover:bg-[#FCF8DD]/10 hover:text-[#FCF8DD]/90'
-                              }
-                            `}
-                            onClick={() => loadConversation(conversation.scannerType, conversation)}
-                            disabled={isGenerating}
-                          >
-                            <div className="w-full">
-                              <div className="flex items-center gap-2 mb-1">
-                                <div 
-                                  className="w-3 h-3 rounded-full flex-shrink-0"
-                                  style={{ 
-                                    background: (() => {
-                                      const preset = findPresetById(presets, conversation.scannerType);
-                                      return preset ? preset.theme.primary : '#FCF8DD';
-                                    })()
-                                  }}
-                                />
-                                <div className="text-sm font-medium truncate flex-1 min-w-0 pr-8">
-                                  {String(conversation.title)}
-                                </div>
-                                {isActive && <div className="w-1.5 h-1.5 bg-[#112f5e] rounded-full flex-shrink-0 animate-pulse" />}
-                              </div>
-                              <div className={`text-xs opacity-80 ${isActive ? 'text-[#112f5e]/70' : 'text-[#FCF8DD]/60'}`}>
-                                {new Date(conversation.timestamp).toLocaleDateString()}
-                              </div>
-                            </div>
-                          </button>
-                          
-                          <button
-                            className={`absolute bottom-2 right-2 p-1.5 rounded-md transition-all duration-200 opacity-0 group-hover:opacity-100 ${
-                              isActive 
-                                ? 'text-[#112f5e]/60 hover:text-red-600 hover:bg-red-100/20' 
-                                : 'text-[#FCF8DD]/60 hover:text-red-400 hover:bg-red-500/20'
-                            } ${isGenerating ? 'cursor-not-allowed opacity-30' : ''}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!isGenerating) {
-                                setDeleteModalData({
-                                  title: conversation.title,
-                                  scannerType: conversation.scannerType,
-                                  conversationId: conversation.id
-                                });
-                                setShowDeleteModal(true);
-                              }
-                            }}
-                            disabled={isGenerating}
-                            title="Delete conversation"
-                          >
-                            <FaTrash className="text-xs" />
-                          </button>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="text-center text-[#FCF8DD]/60 py-10 text-sm italic">
-                      No conversations yet
-                    </div>
-                  )}
+                <div className="flex-1 overflow-y-auto px-2 min-h-0">
+                  <LazyConversationList
+                    conversations={getAllConversations()}
+                    presets={presets}
+                    onLoadConversation={loadConversation}
+                    onDeleteConversation={(data) => {
+                      setDeleteModalData(data);
+                      setShowDeleteModal(true);
+                    }}
+                    isConversationActive={isConversationActive}
+                    isGenerating={isGenerating}
+                  />
                 </div>
               </div>
           </nav>

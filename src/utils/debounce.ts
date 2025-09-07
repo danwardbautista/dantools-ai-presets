@@ -9,7 +9,7 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
   
   return (...args: Parameters<T>) => {
     clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => func(...args), delay);
+    timeoutId = window.setTimeout(() => func(...args), delay);
   };
 }
 
@@ -41,7 +41,7 @@ export function useDebouncedValue<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = React.useState<T>(value);
 
   React.useEffect(() => {
-    const handler = setTimeout(() => {
+    const handler = window.setTimeout(() => {
       setDebouncedValue(value);
     }, delay);
 
