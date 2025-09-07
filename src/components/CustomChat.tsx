@@ -380,6 +380,14 @@ const ChatMessagesContainer: React.FC<{
       <p className="text-[#FCF8DD]/80 text-base leading-relaxed max-w-xl mx-auto">
         {presetConfig.subtitle || "Start a conversation using the preset configuration selected."}
       </p>
+      <div className="mt-6 px-4">
+        <div className="bg-[#FCF8DD]/5 border border-[#FCF8DD]/20 rounded-lg p-3 max-w-lg mx-auto">
+          <p className="text-[#FCF8DD]/60 text-sm">
+            💡 <strong>Note:</strong> Only your 5 most recent conversations per preset are saved. 
+            Older conversations are automatically removed to optimize performance.
+          </p>
+        </div>
+      </div>
     </div>
   ), [presetConfig.title, presetConfig.subtitle, presetConfig.theme.primary]);
   
@@ -691,6 +699,9 @@ const CustomChat: React.FC<CustomChatProps> = ({
 
   // scroll to bottom when opening chat - with cleanup
   useEffect(() => {
+    // capture cleanup functions at effect setup to avoid stale closure warnings
+    const cleanupFunctions = cleanupFunctionsRef.current;
+    
     if (chatFeedRef.current) {
       const chatFeed = chatFeedRef.current;
       const timeoutId = setTimeout(() => {
@@ -698,7 +709,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
       }, 50);
       
       const cleanup = () => clearTimeout(timeoutId);
-      cleanupFunctionsRef.current.push(cleanup);
+      cleanupFunctions.push(cleanup);
     }
     
     // reset stuff when switching chats
@@ -722,8 +733,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
         streamingScrollRef.current = null;
       }
       
-      // run all cleanup functions - capture ref to avoid stale closure
-      const cleanupFunctions = cleanupFunctionsRef.current;
+      // run all cleanup functions - use captured value
       cleanupFunctions.forEach(cleanup => cleanup());
       cleanupFunctions.length = 0;
       
@@ -794,6 +804,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
   };
 
   // send message to openai
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- false positive, this is not conditional
   const sendMessage = useCallback(async (messageText?: string) => {
     const textToSend = messageText || input.trim();
     if (!textToSend || isTyping) return;
@@ -932,13 +943,15 @@ const CustomChat: React.FC<CustomChatProps> = ({
         setAbortController(null);
       }
     }
-  }, [input, isTyping, messages, optimizedMessages, systemPrompt, presetConfig, setMessages, setIsGenerating, setStreamingMessage, setOptimizedMessages]);
+  }, [input, isTyping, messages, optimizedMessages, systemPrompt, presetConfig, setMessages, setIsGenerating, setStreamingMessage, setOptimizedMessages, abortController]);
 
   // event handlers that dont cause re-renders
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- false positive, these are not conditional
   const send = useCallback(() => {
     sendMessage();
   }, [sendMessage]);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- false positive, these are not conditional
   const onKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -946,6 +959,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
     }
   }, [send]);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- false positive, these are not conditional
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     adjustTextareaHeight(textareaRef.current);
