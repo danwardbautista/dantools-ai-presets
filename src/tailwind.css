@@ -58,41 +58,46 @@
 }
 
 
-@layer components {
-  /* Unified Scrollbar Styling */
-  .scrollbar-thin,
-  .chat-scroll {
+@layer base {
+  /* Universal Scrollbar Styling for all elements */
+  * {
     scrollbar-width: thin;
     scrollbar-color: var(--color-primary-alpha-30) var(--color-accent);
   }
 
-  .scrollbar-thin::-webkit-scrollbar,
-  .chat-scroll::-webkit-scrollbar {
+  *::-webkit-scrollbar {
     width: 6px;
+    height: 6px;
   }
 
-  .scrollbar-thin::-webkit-scrollbar-track,
-  .chat-scroll::-webkit-scrollbar-track {
+  *::-webkit-scrollbar-track {
     background: var(--color-accent);
   }
 
-  .scrollbar-thin::-webkit-scrollbar-thumb,
-  .chat-scroll::-webkit-scrollbar-thumb {
+  *::-webkit-scrollbar-thumb {
     background: var(--color-primary-alpha-30);
     border-radius: 3px;
   }
 
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover,
-  .chat-scroll::-webkit-scrollbar-thumb:hover {
+  *::-webkit-scrollbar-thumb:hover {
     background: var(--color-primary-alpha-50);
   }
 
-  .scrollbar-thin::-webkit-scrollbar-corner {
+  *::-webkit-scrollbar-corner {
     background: var(--color-accent);
   }
 
-  .scrollbar-thin::-webkit-scrollbar-button {
+  *::-webkit-scrollbar-button {
     display: none;
+  }
+}
+
+@layer components {
+  /* Keep these for backward compatibility and specific cases */
+  .scrollbar-thin,
+  .chat-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primary-alpha-30) var(--color-accent);
   }
 
   /* Code block responsive layout */

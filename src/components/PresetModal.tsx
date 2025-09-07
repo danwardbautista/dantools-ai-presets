@@ -123,7 +123,7 @@ const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose, onSave, edit
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#112f5e] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-[#FCF8DD]/20 scrollbar-thin scrollbar-track-[#0d2549] scrollbar-thumb-[#FCF8DD]/30 hover:scrollbar-thumb-[#FCF8DD]/50">
+      <div className="bg-[#112f5e] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-[#FCF8DD]/20">
         <div className="sticky top-0 bg-[#112f5e] border-b border-[#FCF8DD]/20 px-6 py-4 flex items-center justify-between rounded-t-2xl">
           <div className="flex items-center gap-3">
             <h2 className="text-2xl font-bold text-[#FCF8DD]">
@@ -297,7 +297,7 @@ const PresetModal: React.FC<PresetModalProps> = ({ isOpen, onClose, onSave, edit
             <textarea
               value={formData.systemPrompt}
               onChange={(e) => setFormData(prev => ({ ...prev, systemPrompt: e.target.value }))}
-              className="w-full px-3 py-2 border border-[#FCF8DD]/30 rounded-lg focus:ring-2 focus:ring-[#FCF8DD]/50 focus:border-[#FCF8DD] outline-none bg-[#0d2549] text-[#FCF8DD] placeholder-[#FCF8DD]/60 min-h-[120px] scrollbar-thin scrollbar-track-[#0d2549] scrollbar-thumb-[#FCF8DD]/30 hover:scrollbar-thumb-[#FCF8DD]/50 resize-y"
+              className="w-full px-3 py-2 border border-[#FCF8DD]/30 rounded-lg focus:ring-2 focus:ring-[#FCF8DD]/50 focus:border-[#FCF8DD] outline-none bg-[#0d2549] text-[#FCF8DD] placeholder-[#FCF8DD]/60 min-h-[120px] resize-y"
               placeholder="Enter the system prompt that will guide the AI's behavior for this preset..."
               required
             />

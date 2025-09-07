@@ -509,14 +509,13 @@ const AppContent: React.FC = () => {
                     Clear All
                   </button>
                 </div>
-                <div className="flex-1 overflow-y-auto px-2 space-y-1 min-h-0 scrollbar-thin scrollbar-track-[#0d2549] scrollbar-thumb-[#FCF8DD]/30 hover:scrollbar-thumb-[#FCF8DD]/50">
+                <div className="flex-1 overflow-y-auto px-2 space-y-1 min-h-0">
                   {getAllConversations().length > 0 ? (
                     getAllConversations().slice(0, 20).map((conversation) => {
                       const isActive = isConversationActive(conversation);
                       return (
-                        <div className="relative group">
+                        <div key={`${conversation.scannerType}-${conversation.id}`} className="relative group">
                           <button
-                            key={`${conversation.scannerType}-${conversation.id}`}
                             className={`
                               w-full text-left p-3 rounded-lg transition-all duration-200
                               ${isActive 
@@ -785,7 +784,7 @@ const PresetSelectionScreen: React.FC<PresetSelectionScreenProps> = ({ presets, 
             
             {isDropdownOpen && (
               <div className="absolute top-full left-0 right-0 mt-2 bg-[#112f5e] border-2 border-[#FCF8DD]/30 rounded-2xl shadow-2xl z-50 overflow-hidden">
-                <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-track-[#0d2549] scrollbar-thumb-[#FCF8DD]/30 hover:scrollbar-thumb-[#FCF8DD]/50">
+                <div className="max-h-64 overflow-y-auto">
                   {presets.map((preset, index) => (
                     <button
                       key={preset.id}

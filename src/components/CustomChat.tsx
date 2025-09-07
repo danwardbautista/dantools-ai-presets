@@ -887,7 +887,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
         </div>
 
       <div 
-        className="flex-1 overflow-y-auto px-2 md:px-4 py-6 chat-scroll scrollbar-thin" 
+        className="flex-1 overflow-y-auto px-2 md:px-4 py-6" 
         ref={chatFeedRef}
       >
         <div className="max-w-4xl mx-auto space-y-6">
@@ -915,7 +915,7 @@ const CustomChat: React.FC<CustomChatProps> = ({
           <div className="flex items-end gap-3">
             <textarea
               ref={textareaRef}
-              className={`flex-1 resize-none border rounded-2xl px-6 py-5 focus:ring-2 focus:ring-[#FCF8DD] focus:border-[#FCF8DD] outline-none transition-all duration-200 max-h-48 bg-[#0d2549] text-[#FCF8DD] placeholder-[#FCF8DD]/60 text-lg leading-normal min-h-[60px] scrollbar-thin ${
+              className={`flex-1 resize-none border rounded-2xl px-6 py-5 focus:ring-2 focus:ring-[#FCF8DD] focus:border-[#FCF8DD] outline-none transition-all duration-200 max-h-48 bg-[#0d2549] text-[#FCF8DD] placeholder-[#FCF8DD]/60 text-lg leading-normal min-h-[60px] ${
                 tokenUsage?.level === 'danger' 
                   ? 'border-red-500/50 focus:ring-red-400 focus:border-red-400' 
                   : tokenUsage?.level === 'warning'
